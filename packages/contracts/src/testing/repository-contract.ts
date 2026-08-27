@@ -133,6 +133,17 @@ export function repositoryContractTests(
       expect(listed[0]?.name).toBe('Merchant');
     });
 
+    // Established by the wave 0 spike: an offline write is accepted locally and only
+    // checked against the server version on upload, so `upsert` returning ok is not proof
+    // the write was accepted (spike-findings.md, Finding 1).
+    test('exposes a conflict channel that can be subscribed and unsubscribed', () => {
+      const repo = createRepository();
+      const seen: unknown[] = [];
+      const unsubscribe = repo.conflicts.subscribe((conflict) => seen.push(conflict));
+      expect(typeof unsubscribe).toBe('function');
+      unsubscribe();
+    });
+
     test('a returned record is a copy, so a caller cannot mutate stored state', async () => {
       const repo = createRepository();
       await repo.upsert(makeEntity(ID_A, 'Merchant'), null);

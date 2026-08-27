@@ -15,3 +15,8 @@ coverage/
 dev-dist/
 
 *.log
+
+# Spike only — vendored sqlite-wasm distribution, regenerable (see spike/README.md).
+# The spike itself is committed so its findings are auditable, and deleted at the freeze tag.
+spike/public/sqlite/
+spike/dist/

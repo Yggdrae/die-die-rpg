@@ -1,0 +1,10 @@
+# Throwaway sync rules for the wave 0 spike.
+#
+# One global bucket. The real rules are feature 04's job: they must filter by membership
+# and visibility server-side so a player device never receives GM-only rows
+# (`PRD.md` s.34, feature 03 FR-013). This spike only proves the transport.
+
+bucket_definitions:
+  global:
+    data:
+      - SELECT * FROM entity

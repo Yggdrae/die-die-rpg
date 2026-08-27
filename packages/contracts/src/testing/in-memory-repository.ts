@@ -1,6 +1,12 @@
 import type { EntityEnvelope } from '../entity.ts';
 import type { Id, Version } from '../primitives.ts';
-import type { ListOptions, RepositoryError, SyncedRepository } from '../repository.ts';
+import type {
+  ConflictChannel,
+  DeferredConflict,
+  ListOptions,
+  RepositoryError,
+  SyncedRepository,
+} from '../repository.ts';
 import { err, ok, type Result } from '../result.ts';
 
 /**
@@ -19,6 +25,26 @@ import { err, ok, type Result } from '../result.ts';
  */
 export class InMemoryRepository<T extends EntityEnvelope> implements SyncedRepository<T> {
   readonly #records = new Map<Id, T>();
+  readonly #conflictListeners = new Set<(conflict: DeferredConflict) => void>();
+
+  /**
+   * This double is synchronous, so it never produces a deferred conflict on its own. The
+   * channel exists so features can be built and tested against the real shape, and
+   * `emitDeferredConflict` lets a test drive the path feature 03 will drive in production.
+   */
+  readonly conflicts: ConflictChannel = {
+    subscribe: (listener) => {
+      this.#conflictListeners.add(listener);
+      return () => this.#conflictListeners.delete(listener);
+    },
+  };
+
+  /** Test-only: simulate a conflict discovered on upload after an offline write. */
+  emitDeferredConflict(conflict: DeferredConflict): void {
+    for (const listener of this.#conflictListeners) {
+      listener(conflict);
+    }
+  }
 
   /** Seed fixture data without going through version checks. */
   seed(records: readonly T[]): void {

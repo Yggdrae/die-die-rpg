@@ -61,3 +61,8 @@ bun test packages/contracts && bun run typecheck
   impossible without a data migration.
 - Task 10 can invalidate `SyncedRepository`. Do not treat this task as final until the spike
   reports.
+- **It did.** The spike found that conflict detection on an offline write is asynchronous: the
+  local write succeeds, the interface reports success, and the server rejects it on upload
+  (`../spike-findings.md`, Finding 1). `SyncedRepository` therefore also carries a `conflicts`
+  channel of `DeferredConflict`. `upsert` returning ok is not proof the server accepted the
+  write. This is exactly the class of error the spike exists to catch before the freeze.

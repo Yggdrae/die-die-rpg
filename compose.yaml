@@ -15,6 +15,10 @@ services:
     image: postgres:17-alpine
     container_name: rpg-postgres
     restart: unless-stopped
+    # Logical replication is what a sync provider reads changes from (`PRD.md` s.55).
+    # Set here rather than in the spike so the stack a developer starts is the stack
+    # feature 03 needs.
+    command: postgres -c wal_level=logical -c max_replication_slots=8 -c max_wal_senders=8
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-rpg}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-rpg_dev_password}

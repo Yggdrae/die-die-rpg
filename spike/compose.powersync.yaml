@@ -1,0 +1,41 @@
+# Throwaway. Wave 0 spike only, deleted at the freeze tag.
+#
+# Runs alongside the main stack (../compose.yaml) on the same network. Whether any of this
+# becomes permanent is feature 03's decision, not the spike's.
+
+services:
+  powersync:
+    image: journeyapps/powersync-service:latest
+    container_name: rpg-powersync-spike
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      POWERSYNC_CONFIG_PATH: /config/powersync.yaml
+      NODE_OPTIONS: --max-old-space-size=1000
+    volumes:
+      # Relative to the compose PROJECT directory (repo root), not to this file.
+      - ./spike/powersync:/config:ro
+    ports:
+      - '8080:8080'
+
+  # The write-path backend runs inside the Docker network because neither node-postgres nor
+  # Bun's SQL client could reach the WSL-hosted PostgreSQL reliably from Windows. Inside the
+  # network `postgres` is just a hostname. Finding for task 08, not a PowerSync property.
+  spike-backend:
+    image: node:22-alpine
+    container_name: rpg-spike-backend
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    working_dir: /spike
+    environment:
+      SPIKE_DB_HOST: postgres
+      SPIKE_POWERSYNC_URL: ${SPIKE_PUBLIC_POWERSYNC_URL:-http://localhost:8080}
+    volumes:
+      - ./spike:/spike
+    command: node backend.mjs
+    ports:
+      - '3099:3099'

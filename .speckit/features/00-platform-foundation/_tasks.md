@@ -17,13 +17,29 @@ not on separate tracks.
 | 05 | [In-memory SyncedRepository double](tasks/task_05.md) | 04 | agent | done |
 | 06 | [Fixtures package](tasks/task_06.md) | 03 | agent | done |
 | 07 | [Application shells](tasks/task_07.md) | 01 | agent | done |
-| 08 | [Local development stack](tasks/task_08.md) | 01 | A | `compose.yaml` and `.env.example` written but **never run** — no Docker on the authoring machine |
+| 08 | [Local development stack](tasks/task_08.md) | 01 | agent | done; PostgreSQL 17.11 + MinIO verified healthy, persistence across restart, `wal_level=logical` |
 | 09 | [Architecture guard and code ownership](tasks/task_09.md) | 01, 07 | agent | done; `CODEOWNERS` handles are placeholders |
-| 10 | [Feasibility spike: sync and search](tasks/task_10.md) | 08 | A | not started — needs Docker, a PowerSync decision, and real browser testing |
-| 11 | [Freeze: decisions, ADR, tag](tasks/task_11.md) | 02, 04, 05, 06, 09, 10 | all | blocked on 08 and 10 |
+| 10 | [Feasibility spike: sync and search](tasks/task_10.md) | 08 | agent | done; **GO on both**, see [spike-findings.md](spike-findings.md). Forced a contract change (task 04) |
+| 11 | [Freeze: decisions, ADR, tag](tasks/task_11.md) | 02, 04, 05, 06, 09, 10 | you | ready — see Remaining below |
 
-Verified at commit `a36e30d`: `check`, `typecheck`, `test` (105 passing), `guard`
+Verified: `check` (50 files clean), `typecheck` (5 workspaces), `test` (106 passing), `guard`
 (34 files, no violations), and `build` all pass.
+
+## Remaining for task 11
+
+Four items, none of them code:
+
+1. Replace the placeholder handles in `.github/CODEOWNERS` (`@track-a`, `@track-b`, `@track-c`,
+   `@all-devs`).
+2. Set the local database size budget (FR-013), measured against the fixture campaign. The spike
+   gives the shape: 5000 rows opened and read in 8 ms, so the constraint is size on disk and the
+   `PRD.md` s.79 budget, not query speed.
+3. Decide long-text concurrency (FR-012): single-writer, or optimistic concurrency with the
+   shared conflict surface.
+4. Answer the five product decisions in `../_index.md`. The Cairn and Fate licence question is
+   the long pole and gates features 12, 13, and the scope of 14.
+
+Then write ADR-001, delete `spike/`, and tag.
 
 ## Parallel plan
 
