@@ -1,0 +1,43 @@
+# Code ownership by track (`.speckit/features/_index.md`).
+#
+# Purpose: a change that crosses a track boundary requires a reviewer from the other
+# track. Within a track, a developer owns their features outright and does not wait.
+#
+# Replace the placeholder handles with real ones before the freeze tag.
+# TODO: @track-a, @track-b, @track-c, @all-devs are placeholders.
+
+# Shared foundation. Contract changes need one reviewer per track (feature 00 FR-008).
+/packages/contracts/                        @all-devs
+/packages/fixtures/                         @all-devs
+/packages/config/                           @all-devs
+/tools/guard/                               @all-devs
+/.github/                                   @all-devs
+/.speckit/features/_index.md                @all-devs
+/.speckit/features/00-platform-foundation/  @all-devs
+
+# Track A — platform and data
+/.speckit/features/01-identity-and-membership/       @track-a
+/.speckit/features/02-campaign-lifecycle/            @track-a
+/.speckit/features/03-offline-sync-platform/         @track-a
+/.speckit/features/04-visibility-and-authorization/  @track-a
+/.speckit/features/05-attachments-and-object-storage/ @track-a
+/.speckit/features/06-audit-log/                     @track-a
+/.speckit/features/07-campaign-import-export/        @track-a
+
+# Track B — rules and engines
+/.speckit/features/08-system-package-contract/    @track-b
+/.speckit/features/09-dice-engine/                @track-b
+/.speckit/features/10-formula-engine/             @track-b
+/.speckit/features/11-action-and-effect-engine/   @track-b
+/.speckit/features/12-cairn-2e-system-package/    @track-b
+/.speckit/features/13-fate-core-system-package/   @track-b
+/.speckit/features/14-rules-library/              @track-b
+/systems/                                         @track-b
+
+# Track C — campaign and play UX
+/.speckit/features/15-dynamic-character-sheet/    @track-c
+/.speckit/features/16-campaign-content-entities/  @track-c
+/.speckit/features/17-handouts-and-reveal/        @track-c
+/.speckit/features/18-session-mode/               @track-c
+/.speckit/features/19-encounter-tracker/          @track-c
+/.speckit/features/20-global-search/              @track-c

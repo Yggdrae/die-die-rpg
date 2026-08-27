@@ -1,0 +1,53 @@
+# Local development stack (feature 00 FR-010, task 08).
+#
+# PostgreSQL is the shared relational store (`PRD.md` s.54). MinIO is the default local
+# S3-compatible implementation (`PRD.md` s.32, s.91) — the application depends on an
+# ObjectStorage abstraction, never on MinIO directly.
+#
+# No schema, no migrations, no buckets beyond what the spike needs. Feature 01 creates the
+# first migration; feature 05 owns the object storage layout.
+#
+# NOT VERIFIED: authored without Docker available on the machine that wrote it. First run
+# by a developer confirms it, and fixes belong in task 08.
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    container_name: rpg-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-rpg}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-rpg_dev_password}
+      POSTGRES_DB: ${POSTGRES_DB:-rpg}
+    ports:
+      - '${POSTGRES_PORT:-5432}:5432'
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U ${POSTGRES_USER:-rpg} -d ${POSTGRES_DB:-rpg}']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  minio:
+    image: minio/minio:latest
+    container_name: rpg-minio
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-rpg}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-rpg_dev_password}
+    ports:
+      - '${MINIO_PORT:-9000}:9000'
+      - '${MINIO_CONSOLE_PORT:-9001}:9001'
+    volumes:
+      - minio-data:/data
+    healthcheck:
+      test: ['CMD', 'mc', 'ready', 'local']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  postgres-data:
+  minio-data:

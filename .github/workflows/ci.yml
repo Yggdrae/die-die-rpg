@@ -1,0 +1,43 @@
+name: CI
+
+# Full gates before merge, per docs/SPEC_GUIDELINE.md (Tests and Gates):
+# lint, typecheck, tests, build, plus the architecture guard from feature 00 FR-009.
+# No E2E job: Playwright arrives with the first user-facing flow.
+# No coverage threshold: SPEC_GUIDELINE explicitly rejects it as a quality substitute.
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  gates:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.14
+
+      - name: Install
+        run: bun install --frozen-lockfile
+
+      - name: Lint and format
+        run: bun run check
+
+      - name: Typecheck
+        run: bun run typecheck
+
+      - name: Test
+        run: bun test
+
+      - name: Architecture guard
+        run: bun run guard
+
+      - name: Build
+        run: bun run build
