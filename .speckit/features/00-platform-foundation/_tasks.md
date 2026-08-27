@@ -8,19 +8,22 @@ not on separate tracks.
 
 ## Task list
 
-| # | Task | Depends on | Suggested owner |
-| --- | --- | --- | --- |
-| 01 | [Repository and tooling baseline](tasks/task_01.md) | — | A |
-| 02 | [CI pipeline](tasks/task_02.md) | 01 | C |
-| 03 | [Contracts: core shapes](tasks/task_03.md) | 01 | B |
-| 04 | [Contracts: repository and registries](tasks/task_04.md) | 03 | B |
-| 05 | [In-memory SyncedRepository double](tasks/task_05.md) | 04 | B |
-| 06 | [Fixtures package](tasks/task_06.md) | 03 | C |
-| 07 | [Application shells](tasks/task_07.md) | 01 | C |
-| 08 | [Local development stack](tasks/task_08.md) | 01 | A |
-| 09 | [Architecture guard and code ownership](tasks/task_09.md) | 01, 07 | C |
-| 10 | [Feasibility spike: sync and search](tasks/task_10.md) | 08 | A |
-| 11 | [Freeze: decisions, ADR, tag](tasks/task_11.md) | 02, 04, 05, 06, 09, 10 | all |
+| # | Task | Depends on | Owner | Status |
+| --- | --- | --- | --- | --- |
+| 01 | [Repository and tooling baseline](tasks/task_01.md) | — | agent | done |
+| 02 | [CI pipeline](tasks/task_02.md) | 01 | agent + C | workflow written; branch protection and the deliberate-failure check are outstanding |
+| 03 | [Contracts: core shapes](tasks/task_03.md) | 01 | agent | done |
+| 04 | [Contracts: repository and registries](tasks/task_04.md) | 03 | agent | done |
+| 05 | [In-memory SyncedRepository double](tasks/task_05.md) | 04 | agent | done |
+| 06 | [Fixtures package](tasks/task_06.md) | 03 | agent | done |
+| 07 | [Application shells](tasks/task_07.md) | 01 | agent | done |
+| 08 | [Local development stack](tasks/task_08.md) | 01 | A | `compose.yaml` and `.env.example` written but **never run** — no Docker on the authoring machine |
+| 09 | [Architecture guard and code ownership](tasks/task_09.md) | 01, 07 | agent | done; `CODEOWNERS` handles are placeholders |
+| 10 | [Feasibility spike: sync and search](tasks/task_10.md) | 08 | A | not started — needs Docker, a PowerSync decision, and real browser testing |
+| 11 | [Freeze: decisions, ADR, tag](tasks/task_11.md) | 02, 04, 05, 06, 09, 10 | all | blocked on 08 and 10 |
+
+Verified at commit `a36e30d`: `check`, `typecheck`, `test` (105 passing), `guard`
+(34 files, no violations), and `build` all pass.
 
 ## Parallel plan
 
