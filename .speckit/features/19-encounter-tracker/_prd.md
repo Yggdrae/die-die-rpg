@@ -84,7 +84,8 @@ own condition rather than enemy statistics.
 - FR-010: Add and remove participants mid-encounter.
 - FR-011: End an encounter, retaining it in the session record (feature 18 FR-003).
 - FR-012: Full offline operation (`PRD.md` s.76).
-- FR-013: Player view scoped by feature 04, so enemy statistics are not exposed by the tracker.
+- FR-013: Player view scoped by feature 04. It shows public participant identities and conditions
+  plus the player's own state, but never enemy statistics or hidden participants.
 - FR-014: Audit events for participant state changes (feature 06).
 - FR-015: `ExportableModule` implementation for feature 07.
 
@@ -161,8 +162,7 @@ its two acceptance tests alongside feature 15.
 - TODO: Whether encounter participants are references to characters and entities or lightweight
   copies with a link. The write-through constraint favours references; ad hoc participants may
   need a different shape.
-- TODO: What a player sees of an encounter in MVP. `PRD.md` s.69 defines a minimal player scope
-  that does not mention encounters.
+- The MVP player encounter view is defined by FR-013.
 - TODO: Whether the condition model from the feature 11 open question is sufficient for tracker
   display, or whether conditions need duration to be useful here.
 - TODO: How multiple instances of one creature are named and distinguished in the interface.

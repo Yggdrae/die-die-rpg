@@ -58,8 +58,8 @@ by accident.
 
 ### P0 — MVP
 
-- FR-001: Role to permission mapping for the five roles in `PRD.md` s.60: `owner`, `gm`,
-  `assistant_gm`, `player`, `observer`. Permissions are declared as capability verbs
+- FR-001: Role to permission mapping for the four MVP roles: `owner`, `gm`, `assistant_gm`, and
+  `player`. The reserved `observer` role fails closed until its post-MVP permissions are defined. Permissions are declared as capability verbs
   (read, create, update, delete, reveal, manage members) per resource class.
 - FR-002: Content visibility levels per `PRD.md` s.34: GM only, everyone, specific party,
   specific players.
@@ -147,7 +147,7 @@ since a leak during play cannot be undone.
 
 - TODO: Exact permission verbs per resource class. Depends on the resource classes features
   15 to 19 register; the matrix is filled as they land.
-- TODO: `observer` capabilities in MVP (`PRD.md` s.60 lists it, s.69 does not exercise it).
+- `observer` is deferred beyond MVP and has no MVP capabilities.
 - TODO: Whether party is a first-class grouping in MVP or specific-players only, given
   `PRD.md` s.34 lists both.
 - TODO: Whether un-reveal is supported in MVP, and what it means for data already on a player device.

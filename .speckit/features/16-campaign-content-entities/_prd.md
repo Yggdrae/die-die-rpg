@@ -157,8 +157,7 @@ the working dataset: five locations, six NPCs, five items.
 
 ## Open Questions
 
-- TODO: Whether a GM can read player-authored notes. `PRD.md` s.6 grants players note-taking and
-  does not state who else can see it. Players will assume privacy; the default must be deliberate.
+- Player-authored private notes are visible only to their author. GM roles cannot read them.
 - TODO: Whether custom fields (`PRD.md` s.30) are free-form key-value or schema-declared in MVP.
 - TODO: Whether creature statistics reuse feature 15 rendering, shared with the feature 15 open
   question. Reuse creates the only Track C internal dependency in the plan.

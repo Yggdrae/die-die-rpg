@@ -149,9 +149,9 @@ that constrains the product, such as choosing not to ship rules text at all, wou
 
 ## Open Questions
 
-- TODO: Verify the exact licence and version of Cairn 2e and what it permits for rules text,
-  mechanics, artwork, logo, and translation, then fill FR-002. Not verifiable from repository
-  context and it gates FR-011. This is the blocking question for this feature.
+- Ship only official SRD-derived text/data under the applicable Creative Commons terms, preserving
+  attribution and share-alike obligations. Book artwork, layout, logos, and trademarks require
+  separate permission and are excluded.
 - TODO: Whether attribute damage and scars need condition duration, which depends on feature 11
   FR-101 and its open question about the condition model.
 - TODO: Whether spellbooks need a compendium (feature 08 FR-101) or fit in inventory declarations.

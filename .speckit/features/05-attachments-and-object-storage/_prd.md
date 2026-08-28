@@ -68,8 +68,8 @@ Players viewing revealed attachments, often on a phone, often on the venue netwo
   maximum size, allowed MIME types, campaign ownership.
 - FR-005: Post-upload finalization verifying declared size and checksum. An unfinalized upload
   is not visible as an attachment and is garbage-collected.
-- FR-006: Attachment types per `PRD.md` s.31: image, audio, video, PDF, markdown, text, map,
-  external link, handout. Unsupported types are rejected at validation, not at render time.
+- FR-006: MVP accepts PDF, JPEG, PNG, and WebP files up to 25 MB each. SVG, audio, video,
+  Markdown, text, and other types are rejected at validation, not at render time.
 - FR-007: Download and view through authorized, expiring signed read URLs. Visibility from
   feature 04 decides access.
 - FR-008: Untrusted content is never rendered as executable HTML in the application origin
@@ -152,9 +152,8 @@ integration is not the first time MinIO is started.
 
 ## Open Questions
 
-- TODO: Maximum file size per type, and total storage budget per campaign. Not stated anywhere
-  in the repository; needed before FR-004 can be implemented.
-- TODO: Allowed MIME type list per attachment type in `PRD.md` s.31.
+- Maximum size is 25 MB per file. Allowed MIME types are `application/pdf`, `image/jpeg`,
+  `image/png`, and `image/webp`. SVG is excluded because it can contain active or external content.
 - TODO: Whether feature 07 export includes binaries or only the manifest (`PRD.md` s.65 lists
   `attachments-manifest/`, which suggests manifest only).
 - TODO: Object retention window after campaign deletion.

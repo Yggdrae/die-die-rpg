@@ -146,9 +146,8 @@ feature 08 and is worth an ADR there, since it shapes every future system with n
 
 ## Open Questions
 
-- TODO: Verify the exact licence and version of Fate Core and what it permits for rules text,
-  mechanics, artwork, logo, and translation, then fill FR-002. Not verifiable from repository
-  context and it gates FR-012. This is the blocking question for this feature.
+- Ship only official CC-BY SRD-derived text/data with required attribution. Book artwork, layout,
+  logos, and trademarks require separate permission and are excluded.
 - TODO: Whether the feature 08 resource shape can express stress boxes, or whether a track
   primitive is needed. Answer this in wave 1; it is the single highest-value contract question
   in the MVP.
