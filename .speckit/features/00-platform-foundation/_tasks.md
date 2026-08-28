@@ -11,7 +11,7 @@ not on separate tracks.
 | # | Task | Depends on | Owner | Status |
 | --- | --- | --- | --- | --- |
 | 01 | [Repository and tooling baseline](tasks/task_01.md) | — | agent | done |
-| 02 | [CI pipeline](tasks/task_02.md) | 01 | agent + C | workflow written; branch protection and the deliberate-failure check are outstanding |
+| 02 | [CI pipeline](tasks/task_02.md) | 01 | agent | done except branch protection; CI verified red on a deliberate defect (PR #1) |
 | 03 | [Contracts: core shapes](tasks/task_03.md) | 01 | agent | done |
 | 04 | [Contracts: repository and registries](tasks/task_04.md) | 03 | agent | done |
 | 05 | [In-memory SyncedRepository double](tasks/task_05.md) | 04 | agent | done |
@@ -25,21 +25,36 @@ not on separate tracks.
 Verified: `check` (50 files clean), `typecheck` (5 workspaces), `test` (106 passing), `guard`
 (34 files, no violations), and `build` all pass.
 
+## CI, verified
+
+PR #1 proved the pipeline blocks a defect: `bun run check` failed on a deliberate `any`, the
+job exited 1, the merge was blocked. Install took 1.3 s and lint 81 ms, so the pipeline is fast
+enough to stay in the way rather than be routed around.
+
+That first run stopped at the first failing gate, so only one of the three deliberately broken
+gates was demonstrated. Gates now run independently (`if: always()`), and the branch was
+re-pushed to prove the rest in a single run.
+
 ## Remaining for task 11
 
-Four items, none of them code:
+Settled since:
 
-1. Replace the placeholder handles in `.github/CODEOWNERS` (`@track-a`, `@track-b`, `@track-c`,
-   `@all-devs`).
-2. Set the local database size budget (FR-013), measured against the fixture campaign. The spike
-   gives the shape: 5000 rows opened and read in 8 ms, so the constraint is size on disk and the
-   `PRD.md` s.79 budget, not query speed.
-3. Decide long-text concurrency (FR-012): single-writer, or optimistic concurrency with the
-   shared conflict surface.
-4. Answer the five product decisions in `../_index.md`. The Cairn and Fate licence question is
-   the long pole and gates features 12, 13, and the scope of 14.
+- **FR-013 done.** Budget 60 MB per synchronized campaign, measured — see
+  [freeze-decisions.md](freeze-decisions.md). Reproduce with
+  `bun run --filter @rpg/guard measure`.
+- **ADR-001 written**, in [adrs/](adrs/).
 
-Then write ADR-001, delete `spike/`, and tag.
+Still open, none of it code:
+
+1. **Ratify FR-012.** Recommendation is single-writer with explicit takeover, not optimistic
+   concurrency. Reasoning in [freeze-decisions.md](freeze-decisions.md).
+2. **Branch protection** on `main` requiring the `gates` job. The only unmet criterion left in
+   task 02.
+3. **Real handles** in `.github/CODEOWNERS` (`@track-a`, `@track-b`, `@track-c`, `@all-devs`).
+4. **The five product decisions** in `../_index.md`. The Cairn and Fate licence question is the
+   long pole and gates features 12, 13, and the scope of 14.
+
+Then close PR #1, delete the `ci/prove-gates-catch-failures` branch, delete `spike/`, and tag.
 
 ## Parallel plan
 

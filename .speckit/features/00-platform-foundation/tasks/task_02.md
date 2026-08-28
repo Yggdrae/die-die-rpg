@@ -51,3 +51,17 @@ branch is red.
 
 - The architecture guard (task 09) is added to this pipeline when it exists. Leave the workflow
   easy to extend with one more step.
+
+## Outcome
+
+Verified on PR #1 (2026-08-27). `bun run check` failed on a deliberate `any`, the job exited 1,
+the merge was blocked. Install 1.3 s, lint 81 ms.
+
+Two changes came out of that first run:
+
+- The pipeline was fail-fast, so only the first broken gate was reported. Every gate now runs
+  independently (`if: always()`), gated on install succeeding. Fixing a broken branch no longer
+  costs one push per gate.
+- `actions/checkout` bumped v4 to v5, clearing the Node 20 deprecation warning.
+
+**Still unmet:** branch protection on `main` requiring the `gates` job. Needs repository admin.
