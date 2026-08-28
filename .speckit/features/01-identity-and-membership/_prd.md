@@ -58,8 +58,8 @@ A player receiving an invitation link, often minutes before a session starts, of
 - FR-001: Account creation with email and password. Email uniqueness enforced server-side.
 - FR-002: Login and logout. Server-issued session credential with expiry and revocation.
 - FR-003: Password recovery through a single-use, expiring token sent to the registered email.
-- FR-004: Campaign membership record binding a user to a campaign with exactly one role from
-  `Role` (`PRD.md` s.60): `owner`, `gm`, `assistant_gm`, `player`, `observer`.
+- FR-004: Campaign membership record binding a user to a campaign with exactly one MVP role:
+  `owner`, `gm`, `assistant_gm`, or `player`. The shared `observer` value is reserved for later.
 - FR-005: The campaign creator becomes `owner`. A campaign always has exactly one `owner`.
 - FR-006: Invitation tokens: created by `owner` or `gm`, carry the target role, are single-use,
   expire, and can be revoked before use.
@@ -139,6 +139,6 @@ the fixture actor set until then. No migration concerns; this is the first persi
 
 - TODO: Transactional email provider for recovery and invitations. Not decided anywhere in the
   repository. Development can proceed with local mail capture.
-- TODO: Whether an `observer` role is in MVP scope or listed for later. `PRD.md` s.60 lists it;
-  s.69 player scope does not exercise it.
+- `observer` is deferred beyond MVP. Its shared contract value remains reserved for forward
+  compatibility and cannot be assigned to an MVP membership.
 - TODO: Account deletion and data retention policy.

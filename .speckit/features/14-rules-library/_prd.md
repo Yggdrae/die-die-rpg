@@ -150,9 +150,9 @@ None specific. The licence-gating approach belongs to feature 08 FR-003 and is a
 
 ## Open Questions
 
-- TODO: Whether MVP rules text ships at all for Cairn and Fate, which depends on the licence
-  questions blocking features 12 and 13. If neither permits redistribution, this feature reduces
-  to FR-010 plus external references, which is a materially smaller feature and should be re-scoped.
+- MVP rules text may ship only from the official Cairn and Fate SRDs under their applicable
+  Creative Commons terms, with required attribution and share-alike compliance. Book content
+  outside those SRDs is excluded.
 - TODO: Search implementation for offline use, given the local database is SQLite/WASM
   (`PRD.md` s.53) and full-text search capability there needs verification.
 - TODO: Whether player-permitted rules (`PRD.md` s.69) is a per-section visibility declaration in

@@ -3,7 +3,7 @@
 Recorded at the freeze tag per feature 00 FR-008, FR-012, FR-013.
 A wave 1 developer should find every answer they need here without asking anyone.
 
-Status: **FR-013 decided. FR-012 recommended, awaiting ratification.**
+Status: **Frozen. FR-012 and FR-013 ratified. Product decisions recorded.**
 
 ---
 
@@ -61,9 +61,9 @@ size estimate (`PRD.md` s.77).
 
 ## FR-012 — Long-text concurrency for MVP
 
-**Recommendation: single-writer, with an explicit takeover. Not optimistic concurrency.**
+**Decision: single-writer, with an explicit takeover. Not optimistic concurrency.**
 
-TODO: ratify. This is the one open decision in this document.
+Ratified on 2026-08-27.
 
 ### Reasoning
 
@@ -114,14 +114,14 @@ runs in wave 0 rather than wave 3.
 
 ---
 
-## Still open — product decisions, not developer decisions
+## Product decisions
 
-These block the tag. See `../_index.md` for the full table.
+Ratified on 2026-08-27:
 
-| Decision | Blocks |
+| Decision | Outcome |
 | --- | --- |
-| Cairn 2e and Fate Core licence verification | 12, 13; rescopes 14 |
-| Can a GM read player-authored notes? | 16 |
-| Is `observer` in MVP scope? | 01, 04 |
-| What players see in Session Mode and encounters | 18, 19 |
-| Maximum file size and MIME allowlist | 05 |
+| Cairn 2e and Fate Core licensing | Ship only official SRD-derived text/data under their applicable Creative Commons terms, with required attribution and share-alike compliance. Do not ship book artwork, layout, logos, or trademarks without separate permission. |
+| Player-authored notes | Private to their author. GM roles cannot read them. |
+| `observer` | Deferred beyond MVP. The contract value remains reserved for forward compatibility. |
+| Player Session Mode and encounter view | Show session status, revealed scene information, the player's own character, visible party summaries, revealed handouts, public log entries, public participant identities/conditions, and the player's own state. Never send GM notes, hidden rolls, unrevealed entities, or enemy statistics. |
+| Attachments | MVP accepts PDF, JPEG, PNG, and WebP, up to 25 MB per file. SVG is excluded. |

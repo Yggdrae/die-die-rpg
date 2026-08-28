@@ -133,20 +133,15 @@ contracts they describe are real.
 Not part of the gate: `00` FR-101 and FR-102 are P1 and land after the tracks are already running.
 Feature 00 is never complete at the tag, and it is not supposed to be.
 
-### Product decisions to make during wave 0
+### Product decisions made during wave 0
 
-These run in parallel with the foundation build. None of them blocks feature 00 itself.
-
-| Decision | Blocks | Track |
+| Decision | Outcome | Track |
 | --- | --- | --- |
-| Cairn 2e and Fate Core licence verification | 12, 13; rescopes 14 | B |
-| Can a GM read player-authored notes? | 16 | C |
-| Is `observer` in MVP scope? | 01, 04 | A |
-| What players see in Session Mode and encounters | 18, 19 | C |
-| Maximum file size and MIME allowlist | 05 | A |
-
-The licence question is the long pole: it may need external verification rather than a decision,
-and it is the only item here that can rescope a whole feature. Start it on day one of wave 0.
+| Cairn 2e and Fate Core licensing | Official SRD-derived text/data only, with required Creative Commons attribution and share-alike compliance; no book artwork, layout, logos, or trademarks without separate permission | B |
+| Can a GM read player-authored notes? | No; those notes are private to their author | C |
+| Is `observer` in MVP scope? | No; deferred while the contract value remains reserved | A |
+| What players see in Session Mode and encounters | Only revealed/public information, their own character/state, and permitted party summaries; never GM notes, hidden rolls, unrevealed entities, or enemy statistics | C |
+| Maximum file size and MIME allowlist | 25 MB; PDF, JPEG, PNG, and WebP only | A |
 
 ## Artifacts per feature
 

@@ -41,16 +41,16 @@ tag that starts the three tracks is announced.
 
 ## Acceptance Criteria
 
-- [ ] Every line of the Definition of Ready in `../_index.md` is satisfied or explicitly waived
+- [x] Every line of the Definition of Ready in `../_index.md` is satisfied or explicitly waived
       with a reason.
-- [ ] Task 10 findings are reconciled; if sync was no-go, the redraft is committed before the tag.
-- [ ] FR-012 and FR-013 decisions are recorded where a wave 1 developer will find them without
+- [x] Task 10 findings are reconciled; if sync was no-go, the redraft is committed before the tag.
+- [x] FR-012 and FR-013 decisions are recorded where a wave 1 developer will find them without
       asking.
-- [ ] ADR-001 states the decision, the last-write-wins alternative, and why it was rejected
+- [x] ADR-001 states the decision, the last-write-wins alternative, and why it was rejected
       (`PRD.md` s.57, s.80).
-- [ ] `spike/` no longer exists in the tree.
-- [ ] Tag exists and is announced with a pointer to `../_index.md`.
-- [ ] The five product decisions in `../_index.md` are answered, or the features they block are
+- [x] `spike/` no longer exists in the tree.
+- [x] Tag exists and is announced with a pointer to `../_index.md`.
+- [x] The five product decisions in `../_index.md` are answered, or the features they block are
       explicitly flagged as starting with an open dependency. The licence question is the one most
       likely to still be open; if so, features 12, 13, and 14 start knowing it.
 
@@ -69,3 +69,16 @@ from a clean clone at the tag. Then confirm a feature can be scaffolded importin
   work for four waves without asking each other a question.
 - If something on the gate is not met, say so and waive it deliberately with a written reason.
   A silently unmet gate is discovered in wave 3, by which time it is expensive.
+
+## Outcome
+
+Completed on 2026-08-27. Freeze tag: `platform-foundation-freeze-2026-08-27`.
+
+- Sync and search spikes are both GO; the deferred conflict channel was added before freeze.
+- FR-012 uses single-writer long text with explicit takeover. FR-013 budgets 60 MB per campaign.
+- Product decisions are recorded in `../freeze-decisions.md` and `../../_index.md`.
+- `main` branch protection requires the strict `gates` status check, including for administrators.
+- Full local gates pass: Biome checked 51 files, five workspaces typechecked, 106 tests passed,
+  and both application builds passed.
+- A temporary workspace scaffold imported `@rpg/contracts` and `@rpg/fixtures` while the API was
+  stopped, then was removed.

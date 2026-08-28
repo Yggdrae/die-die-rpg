@@ -64,4 +64,5 @@ Two changes came out of that first run:
   costs one push per gate.
 - `actions/checkout` bumped v4 to v5, clearing the Node 20 deprecation warning.
 
-**Still unmet:** branch protection on `main` requiring the `gates` job. Needs repository admin.
+Branch protection was enabled on 2026-08-27. `main` requires the strict `gates` status check,
+including for administrators.

@@ -87,7 +87,10 @@ view subject to feature 04.
 - FR-010: Session log combining rolls, effect applications, reveals, and notes in chronological
   order, scoped by visibility.
 - FR-011: Full offline operation: start, run, and end a session with no network (`PRD.md` s.76).
-- FR-012: Player session view showing only what the player may see (feature 04).
+- FR-012: Player session view showing session status, revealed scene information, the player's
+  own character, visible party summaries, revealed handouts, public log entries, public encounter
+  participant identities and conditions, and the player's own encounter state. It never includes
+  GM notes, hidden rolls, unrevealed entities, or enemy statistics.
 - FR-013: Audit events for session start, end, and scene change (feature 06).
 - FR-014: `ExportableModule` implementation for feature 07.
 - FR-015: Cold open to usable Session Mode within p95 under 2 seconds, offline, warm local
@@ -171,7 +174,7 @@ appear in a demo.
   question. `PRD.md` s.29 lists scenes as campaign content; s.44 shows a current scene in session.
 - TODO: Whether the session log is a view over the audit log (feature 06), a separate store, or
   both. Affects volume, retention, and the `PRD.md` s.79 budget.
-- TODO: What a player sees in Session Mode. `PRD.md` s.44 specifies the GM layout only, and s.69
-  defines a minimal player scope.
+- The MVP player view is defined by FR-012 and enforced as distinct synchronized data, not a
+  client-side filter over the GM view.
 - TODO: Whether an assistant GM shares the GM view entirely, given `PRD.md` s.87 Tests 5 and 6
   assume they edit the same session note.
