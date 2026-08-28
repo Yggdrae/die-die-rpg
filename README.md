@@ -33,6 +33,12 @@ cp .env.example .env
 docker compose up -d
 ```
 
+Apply all committed forward-only PostgreSQL migrations to `DATABASE_URL`:
+
+```bash
+bun run db:migrate
+```
+
 ## Gates
 
 The four scripts CI runs, plus the architecture guard.

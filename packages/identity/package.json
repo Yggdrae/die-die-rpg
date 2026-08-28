@@ -1,20 +1,20 @@
 {
-  "name": "@rpg/api",
+  "name": "@rpg/identity",
   "version": "0.0.0",
   "private": true,
   "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
   "scripts": {
-    "dev": "bun --watch src/main.ts",
-    "start": "bun src/main.ts",
-    "build": "bun build src/main.ts --target=bun --outdir=dist",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@fastify/type-provider-typebox": "^5.2.0",
+    "@node-rs/argon2": "^2.0.2",
     "@rpg/contracts": "workspace:*",
-    "@rpg/identity": "workspace:*",
     "@sinclair/typebox": "^0.34.48",
-    "fastify": "^5.7.1"
+    "drizzle-orm": "^0.45.2",
+    "postgres": "^3.4.9"
   },
   "devDependencies": {
     "@rpg/config": "workspace:*"
