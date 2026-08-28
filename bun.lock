@@ -70,6 +70,7 @@
       "version": "0.0.0",
       "devDependencies": {
         "@rpg/config": "workspace:*",
+        "@rpg/fixtures": "workspace:*",
       },
     },
   },

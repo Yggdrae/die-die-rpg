@@ -8,9 +8,11 @@
   },
   "scripts": {
     "guard": "bun src/cli.ts",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "measure": "bun src/measure-fixture-size.ts"
   },
   "devDependencies": {
-    "@rpg/config": "workspace:*"
+    "@rpg/config": "workspace:*",
+    "@rpg/fixtures": "workspace:*"
   }
 }
