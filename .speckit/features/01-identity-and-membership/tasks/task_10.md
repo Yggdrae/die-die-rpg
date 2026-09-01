@@ -27,11 +27,11 @@ handling.
 
 ## Acceptance Criteria
 
-- [ ] Route schemas reject malformed/oversized input before use cases run.
-- [ ] Production cookie is `HttpOnly`, `Secure`, and `SameSite=Lax`; logout clears it.
-- [ ] State-changing cookie routes enforce the approved origin/CSRF policy.
-- [ ] Authentication and token endpoints are rate limited and enumeration resistant.
-- [ ] Responses/logs never contain passwords, hashes, digests, or unintended raw credentials.
+- [x] Route schemas reject malformed/oversized input before use cases run.
+- [x] Production cookie is `HttpOnly`, `Secure`, and `SameSite=Lax`; logout clears it.
+- [x] State-changing cookie routes enforce the approved origin/CSRF policy.
+- [x] Authentication and token endpoints are rate limited and enumeration resistant.
+- [x] Responses/logs never contain passwords, hashes, digests, or unintended raw credentials.
 
 ## Verification
 

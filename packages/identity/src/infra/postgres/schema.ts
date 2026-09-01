@@ -1,5 +1,6 @@
 import { sql } from 'drizzle-orm';
 import {
+  bigint,
   check,
   customType,
   index,
@@ -138,8 +139,83 @@ export const identityRecoveryTokens = pgTable(
   ],
 );
 
+export const identityCampaignMemberships = pgTable(
+  'identity_campaign_memberships',
+  {
+    campaignId: uuid('campaign_id').notNull(),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => identityUsers.id, { onDelete: 'restrict' }),
+    role: text('role').notNull(),
+    createdAt: instant('created_at').notNull().defaultNow(),
+    updatedAt: instant('updated_at').notNull().defaultNow(),
+    removedAt: instant('removed_at'),
+    version: bigint('version', { mode: 'number' }).notNull().default(1),
+  },
+  (table) => [
+    primaryKey({ columns: [table.campaignId, table.userId] }),
+    uniqueIndex('identity_campaign_memberships_active_owner_uidx')
+      .on(table.campaignId)
+      .where(sql`${table.role} = 'owner' AND ${table.removedAt} IS NULL`),
+    index('identity_campaign_memberships_user_active_idx')
+      .on(table.userId, table.campaignId)
+      .where(sql`${table.removedAt} IS NULL`),
+    index('identity_campaign_memberships_campaign_role_idx')
+      .on(table.campaignId, table.role)
+      .where(sql`${table.removedAt} IS NULL`),
+    check(
+      'identity_campaign_memberships_role_check',
+      sql`${table.role} IN ('owner', 'gm', 'assistant_gm', 'player')`,
+    ),
+    check('identity_campaign_memberships_version_check', sql`${table.version} >= 1`),
+  ],
+);
+
+export const identityInvitations = pgTable(
+  'identity_invitations',
+  {
+    id: uuid('id').primaryKey(),
+    campaignId: uuid('campaign_id').notNull(),
+    createdByUserId: uuid('created_by_user_id')
+      .notNull()
+      .references(() => identityUsers.id, { onDelete: 'restrict' }),
+    targetRole: text('target_role').notNull(),
+    tokenDigest: bytea('token_digest').notNull(),
+    createdAt: instant('created_at').notNull().defaultNow(),
+    expiresAt: instant('expires_at').notNull(),
+    usedAt: instant('used_at'),
+    acceptedByUserId: uuid('accepted_by_user_id').references(() => identityUsers.id, {
+      onDelete: 'restrict',
+    }),
+    revokedAt: instant('revoked_at'),
+    revokedByUserId: uuid('revoked_by_user_id').references(() => identityUsers.id, {
+      onDelete: 'restrict',
+    }),
+  },
+  (table) => [
+    uniqueIndex('identity_invitations_digest_uidx').on(table.tokenDigest),
+    index('identity_invitations_campaign_created_idx').on(table.campaignId, table.createdAt.desc()),
+    index('identity_invitations_expiry_idx').on(table.expiresAt),
+    check(
+      'identity_invitations_role_check',
+      sql`${table.targetRole} IN ('gm', 'assistant_gm', 'player')`,
+    ),
+    check('identity_invitations_digest_length_check', sql`octet_length(${table.tokenDigest}) = 32`),
+    check(
+      'identity_invitations_acceptance_check',
+      sql`(${table.usedAt} IS NULL) = (${table.acceptedByUserId} IS NULL)`,
+    ),
+    check(
+      'identity_invitations_expiry_check',
+      sql`${table.expiresAt} >= ${table.createdAt} + interval '5 minutes' AND ${table.expiresAt} <= ${table.createdAt} + interval '30 days'`,
+    ),
+  ],
+);
+
 export const identitySchema = {
   identityBindings,
+  identityCampaignMemberships,
+  identityInvitations,
   identityPasswordCredentials,
   identityRecoveryTokens,
   identitySessions,

@@ -28,11 +28,11 @@ continuation across authentication.
 
 ## Acceptance Criteria
 
-- [ ] Signup/login/logout/recovery surfaces map stable API outcomes without revealing secrets.
-- [ ] A logged-out invitation survives signup or login and is accepted exactly once.
-- [ ] Successful acceptance lands in the invited campaign.
-- [ ] UI hides unavailable actions for usability while the server remains authoritative.
-- [ ] Invitation-to-campaign and signup-to-first-campaign flows support PRD timing goals.
+- [x] Signup/login/logout/recovery surfaces map stable API outcomes without revealing secrets.
+- [x] A logged-out invitation survives signup or login and is accepted exactly once.
+- [x] Successful acceptance lands in the invited campaign.
+- [x] UI hides unavailable actions for usability while the server remains authoritative.
+- [x] Invitation-to-campaign and signup-to-first-campaign flows support PRD timing goals.
 
 ## Verification
 

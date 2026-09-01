@@ -18,7 +18,7 @@ CREATE TABLE "identity_password_credentials" (
 CREATE TABLE "identity_recovery_tokens" (
 	"id" uuid PRIMARY KEY NOT NULL,
 	"user_id" uuid NOT NULL,
-	"token_digest" "bytea" NOT NULL,
+	"token_digest" bytea NOT NULL,
 	"issued_at" timestamp with time zone DEFAULT now() NOT NULL,
 	"expires_at" timestamp with time zone NOT NULL,
 	"used_at" timestamp with time zone,
@@ -32,7 +32,7 @@ CREATE TABLE "identity_recovery_tokens" (
 CREATE TABLE "identity_sessions" (
 	"id" uuid PRIMARY KEY NOT NULL,
 	"user_id" uuid NOT NULL,
-	"credential_digest" "bytea" NOT NULL,
+	"credential_digest" bytea NOT NULL,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
 	"expires_at" timestamp with time zone NOT NULL,
 	"revoked_at" timestamp with time zone,

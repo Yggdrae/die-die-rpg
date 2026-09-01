@@ -19,7 +19,18 @@ import {
 } from './schema.ts';
 
 const databaseUrl = process.env.TEST_DATABASE_URL ?? process.env.DATABASE_URL;
-const connection = databaseUrl === undefined ? undefined : connectIdentityDatabase(databaseUrl);
+const candidateConnection =
+  databaseUrl === undefined ? undefined : connectIdentityDatabase(databaseUrl);
+const connection = await (async () => {
+  if (candidateConnection === undefined) return undefined;
+  try {
+    await candidateConnection.db.execute(sql`select 1`);
+    return candidateConnection;
+  } catch {
+    await candidateConnection.close();
+    return undefined;
+  }
+})();
 const database = connection?.db;
 
 afterAll(async () => {
