@@ -1,6 +1,6 @@
 # Task 01: Pure decision engine and matrix test kit
 
-Status: pending. Depends on the feature 01 Actor contract.
+Status: completed.
 
 ## Scope
 
@@ -21,4 +21,3 @@ Status: pending. Depends on the feature 01 Actor contract.
 bun test packages/authorization
 bun run typecheck
 ```
-
