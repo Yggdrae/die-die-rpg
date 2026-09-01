@@ -1,6 +1,6 @@
 # Task 03: Durable mutation queue and SyncedRepository
 
-Status: pending. Depends on task 02.
+Status: completed. Verified with the frozen repository conformance suite and sync package tests.
 
 ## Scope
 
@@ -21,4 +21,3 @@ Status: pending. Depends on task 02.
 bun test packages/sync packages/contracts/src/testing
 bun run typecheck
 ```
-

@@ -8,7 +8,11 @@ if (databaseUrl === undefined || databaseUrl.length === 0) {
 
 export default defineConfig({
   dialect: 'postgresql',
-  schema: './packages/identity/src/infra/postgres/schema.ts',
+  schema: [
+    './packages/identity/src/infra/postgres/schema.ts',
+    './packages/campaigns/src/infra/postgres/schema.ts',
+    './packages/sync/src/infra/postgres/schema.ts',
+  ],
   out: './packages/identity/drizzle',
   dbCredentials: { url: databaseUrl },
   strict: true,

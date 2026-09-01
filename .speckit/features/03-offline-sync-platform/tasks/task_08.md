@@ -1,6 +1,7 @@
 # Task 08: Sync status, browser acceptance, and performance
 
-Status: pending. Depends on tasks 02–07.
+Status: pending. Browser storage is measured; installed-PWA Session Mode, promised offline flows,
+and multi-client provider convergence remain unverified.
 
 ## Scope
 
@@ -24,4 +25,3 @@ bun test
 bun run guard
 bun run build
 ```
-

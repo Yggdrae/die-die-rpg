@@ -1,6 +1,6 @@
 # Task 02: SQLite worker, OPFS persistence, and fallback
 
-Status: pending.
+Status: completed. Verified with package tests, both browser storage backends, and the web build.
 
 ## Scope
 
@@ -21,4 +21,3 @@ Status: pending.
 bun test packages/sync
 bun run build
 ```
-

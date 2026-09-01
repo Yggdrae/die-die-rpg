@@ -1,0 +1,27 @@
+config:
+  edition: 3
+
+streams:
+  authorized_campaigns:
+    auto_subscribe: true
+    queries:
+      - >-
+        SELECT c.id, c.name, c.description, c.game_mode, c.created_by, c.version,
+               c.created_at, c.updated_at, c.deleted_at
+        FROM campaigns c
+        INNER JOIN identity_campaign_memberships m ON m.campaign_id = c.id
+        WHERE m.user_id = auth.user_id() AND m.removed_at IS NULL
+      - >-
+        SELECT concat(s.campaign_id, ':', s.namespace) AS id, s.campaign_id, s.namespace,
+               s.value, s.member_visible, s.version, s.updated_at, s.updated_by, s.deleted_at
+        FROM campaign_settings s
+        INNER JOIN identity_campaign_memberships m ON m.campaign_id = s.campaign_id
+        WHERE m.user_id = auth.user_id() AND m.removed_at IS NULL
+          AND (s.member_visible OR m.role IN ('owner', 'gm', 'assistant_gm'))
+      - >-
+        SELECT concat(h.campaign_id, ':', h.resource_class, ':', h.record_id, ':', h.field_path) AS id,
+               h.campaign_id, h.resource_class, h.record_id, h.field_path, h.holder_user_id,
+               h.acquired_at, h.renewed_at, h.expires_at, h.version
+        FROM sync_long_text_holds h
+        INNER JOIN identity_campaign_memberships m ON m.campaign_id = h.campaign_id
+        WHERE m.user_id = auth.user_id() AND m.removed_at IS NULL

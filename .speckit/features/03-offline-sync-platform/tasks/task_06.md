@@ -1,6 +1,6 @@
 # Task 06: Single-writer long-text holds
 
-Status: pending. Depends on tasks 03–04.
+Status: completed. Verified with hold service, takeover, expiry, route, and client primitive tests.
 
 ## Scope
 
@@ -21,4 +21,3 @@ Status: pending. Depends on tasks 03–04.
 bun test packages/sync apps/api/src/modules/sync apps/web/src/features/sync
 bun run typecheck
 ```
-

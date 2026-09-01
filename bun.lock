@@ -6,6 +6,7 @@
       "name": "die-die-rpg",
       "devDependencies": {
         "@biomejs/biome": "^2.3.14",
+        "@playwright/test": "^1.62.1",
         "@types/bun": "^1.3.14",
         "drizzle-kit": "^0.31.10",
         "typescript": "^5.9.3",
@@ -16,8 +17,12 @@
       "version": "0.0.0",
       "dependencies": {
         "@fastify/type-provider-typebox": "^5.2.0",
+        "@rpg/authorization": "workspace:*",
+        "@rpg/campaigns": "workspace:*",
         "@rpg/contracts": "workspace:*",
+        "@rpg/fixtures": "workspace:*",
         "@rpg/identity": "workspace:*",
+        "@rpg/sync": "workspace:*",
         "@sinclair/typebox": "^0.34.48",
         "fastify": "^5.7.1",
       },
@@ -29,8 +34,11 @@
       "name": "@rpg/web",
       "version": "0.0.0",
       "dependencies": {
+        "@rpg/campaigns": "workspace:*",
         "@rpg/contracts": "workspace:*",
         "@rpg/fixtures": "workspace:*",
+        "@rpg/identity": "workspace:*",
+        "@rpg/sync": "workspace:*",
         "react": "^19.2.0",
         "react-dom": "^19.2.0",
       },
@@ -41,6 +49,30 @@
         "@vitejs/plugin-react": "^5.0.4",
         "vite": "^7.1.13",
         "vite-plugin-pwa": "^1.0.4",
+      },
+    },
+    "packages/authorization": {
+      "name": "@rpg/authorization",
+      "version": "0.0.0",
+      "dependencies": {
+        "@rpg/contracts": "workspace:*",
+      },
+      "devDependencies": {
+        "@rpg/config": "workspace:*",
+      },
+    },
+    "packages/campaigns": {
+      "name": "@rpg/campaigns",
+      "version": "0.0.0",
+      "dependencies": {
+        "@rpg/contracts": "workspace:*",
+        "@rpg/identity": "workspace:*",
+        "@sinclair/typebox": "^0.34.48",
+        "drizzle-orm": "^0.45.2",
+        "postgres": "^3.4.9",
+      },
+      "devDependencies": {
+        "@rpg/config": "workspace:*",
       },
     },
     "packages/config": {
@@ -61,6 +93,7 @@
       "name": "@rpg/fixtures",
       "version": "0.0.0",
       "dependencies": {
+        "@rpg/campaigns": "workspace:*",
         "@rpg/contracts": "workspace:*",
       },
       "devDependencies": {
@@ -72,6 +105,22 @@
       "version": "0.0.0",
       "dependencies": {
         "@node-rs/argon2": "^2.0.2",
+        "@rpg/contracts": "workspace:*",
+        "@sinclair/typebox": "^0.34.48",
+        "drizzle-orm": "^0.45.2",
+        "postgres": "^3.4.9",
+      },
+      "devDependencies": {
+        "@rpg/config": "workspace:*",
+      },
+    },
+    "packages/sync": {
+      "name": "@rpg/sync",
+      "version": "0.0.0",
+      "dependencies": {
+        "@journeyapps/wa-sqlite": "1.7.0",
+        "@powersync/web": "1.39.1",
+        "@rpg/authorization": "workspace:*",
         "@rpg/contracts": "workspace:*",
         "@sinclair/typebox": "^0.34.48",
         "drizzle-orm": "^0.45.2",
@@ -371,6 +420,8 @@
 
     "@isaacs/cliui": ["@isaacs/cliui@9.0.0", "", {}, "sha512-AokJm4tuBHillT+FpMtxQ60n8ObyXBatq7jD2/JA9dxbDDokKQm8KMht5ibGzLVU9IJDIKK4TPKgMHEYMn3lMg=="],
 
+    "@journeyapps/wa-sqlite": ["@journeyapps/wa-sqlite@1.7.0", "", {}, "sha512-xQZ670aKDo4FWxIFpLqY0AGDpURr09aYIO08UkLdWvFw8C018nCiqY0ILJudGRhRdXORhv7K2xD2OXZ2QxU39w=="],
+
     "@jridgewell/gen-mapping": ["@jridgewell/gen-mapping@0.3.13", "", { "dependencies": { "@jridgewell/sourcemap-codec": "^1.5.0", "@jridgewell/trace-mapping": "^0.3.24" } }, "sha512-2kkt/7niJ6MgEPxF0bYdQ6etZaA+fQvDcLKckhy1yIQOzaoKjBBjSj63/aLVjYE3qhRt5dvM+uUyfCg6UKCBbA=="],
 
     "@jridgewell/remapping": ["@jridgewell/remapping@2.3.5", "", { "dependencies": { "@jridgewell/gen-mapping": "^0.3.5", "@jridgewell/trace-mapping": "^0.3.24" } }, "sha512-LI9u/+laYG4Ds1TDKSJW2YPrIlcVYOwi2fUC6xB43lueCjgxV4lffOCZCtYFiH6TNOX+tQKXx97T4IKHbhyHEQ=="],
@@ -414,6 +465,12 @@
     "@node-rs/argon2-win32-x64-msvc": ["@node-rs/argon2-win32-x64-msvc@2.1.0", "", { "os": "win32", "cpu": "x64" }, "sha512-JN/yNiX7u8Cw9XXTbRrjnlgzFjCiEQe6x97wJnMIsJ3vty89q0SAg504Otd9qy2ofQS2F5CCWvrOXhm/oyHaAQ=="],
 
     "@pinojs/redact": ["@pinojs/redact@0.4.0", "", {}, "sha512-k2ENnmBugE/rzQfEcdWHcCY+/FM3VLzH9cYEsbdsoqrvzAKRhUZeRNhAZvB8OitQJ1TBed3yqWtdjzS6wJKBwg=="],
+
+    "@playwright/test": ["@playwright/test@1.62.1", "", { "dependencies": { "playwright": "1.62.1" }, "bin": { "playwright": "cli.js" } }, "sha512-DTcUc8qii+cpHvtOwggMtBRMjKZHXYWdw8syRYu2vtzuq4Wxphqq4NfCs5Zt44L6mA8rfDfj+PHnxFc/FeK6mQ=="],
+
+    "@powersync/common": ["@powersync/common@1.57.3", "", { "dependencies": { "js-logger": "^1.6.1" } }, "sha512-gzXcdfO1EnwXNBITDbnx7oN23d91HjoumS/XzPmVZEwV6S/IBcao/Unv4+aQDvijQVzTtXI+jTl98i9v+TrODQ=="],
+
+    "@powersync/web": ["@powersync/web@1.39.1", "", { "dependencies": { "@powersync/common": "1.57.3", "comlink": "^4.4.2", "commander": "^12.1.0" }, "peerDependencies": { "@journeyapps/wa-sqlite": "^1.5.0" }, "bin": { "powersync-web": "bin/powersync.cjs" } }, "sha512-mu01OE3sQrulRgvDOWw1xRbRbPhJMOfz5sIVIQ2lENGDkqgWdlRhpkHVfeVi80tCZoP/AFYkQAFRszCgzqFUxQ=="],
 
     "@rolldown/pluginutils": ["@rolldown/pluginutils@1.0.0-rc.3", "", {}, "sha512-eybk3TjzzzV97Dlj5c+XrBFW57eTNhzod66y9HrBlzJ6NsCrWCp/2kaPS3K9wJmurBC0Tdw4yPjXKZqlznim3Q=="],
 
@@ -479,6 +536,10 @@
 
     "@rpg/api": ["@rpg/api@workspace:apps/api"],
 
+    "@rpg/authorization": ["@rpg/authorization@workspace:packages/authorization"],
+
+    "@rpg/campaigns": ["@rpg/campaigns@workspace:packages/campaigns"],
+
     "@rpg/config": ["@rpg/config@workspace:packages/config"],
 
     "@rpg/contracts": ["@rpg/contracts@workspace:packages/contracts"],
@@ -488,6 +549,8 @@
     "@rpg/guard": ["@rpg/guard@workspace:tools/guard"],
 
     "@rpg/identity": ["@rpg/identity@workspace:packages/identity"],
+
+    "@rpg/sync": ["@rpg/sync@workspace:packages/sync"],
 
     "@rpg/web": ["@rpg/web@workspace:apps/web"],
 
@@ -569,7 +632,9 @@
 
     "caniuse-lite": ["caniuse-lite@1.0.30001810", "", {}, "sha512-TITQPUkaz+aVk5GL6NhOdwk1aEaNTSDPsGFWrTuhKGtjTF70jL/Oht2W4c6rXUe5fu7Ie19VIahAXHIIiWWNeg=="],
 
-    "commander": ["commander@2.20.3", "", {}, "sha512-GpVkmM8vF2vQUkj2LvZmD35JxeJOLCwJ9cUkugyk2nuhbv3+mJvpLYYt+0+USMxE+oj+ey/lJEnhZw75x/OMcQ=="],
+    "comlink": ["comlink@4.4.2", "", {}, "sha512-OxGdvBmJuNKSCMO4NTl1L47VRp6xn2wG4F/2hYzB6tiCb709otOxtEYCSvK80PtjODfXXZu8ds+Nw5kVCjqd2g=="],
+
+    "commander": ["commander@12.1.0", "", {}, "sha512-Vw8qHK3bZM9y/P10u3Vib8o/DdkvA2OtPtZvD871QKjy74Wj1WSKFILMPRPSdUSx5RFK1arlJzEtA4PkFgnbuA=="],
 
     "common-tags": ["common-tags@1.8.2", "", {}, "sha512-gk/Z852D2Wtb//0I+kRFNKKE9dIIVirjoqPoA1wJU+XePVXZfGeBpk45+A1rKO4Q43prqWBNY/MiIeRLbPWUaA=="],
 
@@ -773,6 +838,8 @@
 
     "jake": ["jake@10.9.4", "", { "dependencies": { "async": "^3.2.6", "filelist": "^1.0.4", "picocolors": "^1.1.1" }, "bin": { "jake": "bin/cli.js" } }, "sha512-wpHYzhxiVQL+IV05BLE2Xn34zW1S223hvjtqk0+gsPrwd/8JNLXJgZZM/iPFsYc1xyphF+6M6EvdE5E9MBGkDA=="],
 
+    "js-logger": ["js-logger@1.6.1", "", {}, "sha512-yTgMCPXVjhmg28CuUH8CKjU+cIKL/G+zTu4Fn4lQxs8mRFH/03QTNvEFngcxfg/gRDiQAOoyCKmMTOm9ayOzXA=="],
+
     "js-tokens": ["js-tokens@4.0.0", "", {}, "sha512-RdJUflcE3cUzKiMqQgsCu06FPu9UdIJO0beYbPhHN4k6apgJtifcoCtT9bcxOpYBtpD2kCM6Sbzg4CausW/PKQ=="],
 
     "jsesc": ["jsesc@3.1.0", "", { "bin": { "jsesc": "bin/jsesc" } }, "sha512-/sM3dO2FOzXjKQhJuo0Q173wf2KOo8t4I8vHy6lF9poUp7bKT0/NHE8fPX23PwfhnykfqnC2xRxOnVw5XuGIaA=="],
@@ -836,6 +903,10 @@
     "pino-abstract-transport": ["pino-abstract-transport@3.0.0", "", { "dependencies": { "split2": "^4.0.0" } }, "sha512-wlfUczU+n7Hy/Ha5j9a/gZNy7We5+cXp8YL+X+PG8S0KXxw7n/JXA3c46Y0zQznIJ83URJiwy7Lh56WLokNuxg=="],
 
     "pino-std-serializers": ["pino-std-serializers@7.1.0", "", {}, "sha512-BndPH67/JxGExRgiX1dX0w1FvZck5Wa4aal9198SrRhZjH3GxKQUKIBnYJTdj2HDN3UQAS06HlfcSbQj2OHmaw=="],
+
+    "playwright": ["playwright@1.62.1", "", { "dependencies": { "playwright-core": "1.62.1" }, "optionalDependencies": { "fsevents": "2.3.2" }, "bin": { "playwright": "cli.js" } }, "sha512-0M+L3LAD8/nm554LOla9Ayx0j0tmFZ0FBcoQ7F1VuVHpM/XpiC8RcDzBQB8W5+hA8L22THxELzeF+2WcUzvcLg=="],
+
+    "playwright-core": ["playwright-core@1.62.1", "", { "bin": { "playwright-core": "cli.js" } }, "sha512-wPYSwEBJY9GHraISXqyqtx0na0LpO3XEX7jNDhntbex7tzUS7kLnZsOlFruFJB4Hi/rhDMjXGqHewDZ68nYZVw=="],
 
     "possible-typed-array-names": ["possible-typed-array-names@1.1.0", "", {}, "sha512-/+5VFTchJDoVj3bhoqi6UeymcD00DAwb1nJwamzPvHEszJ4FpF6SNNbUbOS8yI56qHzdV8eK0qEfOSiodkTdxg=="],
 
@@ -1069,7 +1140,11 @@
 
     "path-scurry/lru-cache": ["lru-cache@11.5.2", "", {}, "sha512-4pfM1Ff0x50o0tQwb5ucw/RzNyD0/YJME6IVcStalZuMWxdt3sR3huStTtxz4PUmvZfRguvDejasvQ2kifR11g=="],
 
+    "playwright/fsevents": ["fsevents@2.3.2", "", { "os": "darwin" }, "sha512-xiqMQR4xAeHTuB9uWm+fFRcIOgKBMiOBP+eXiyT7jsgVCq1bkVygt00oASowB7EdtpOHaaPgKt812P9ab+DDKA=="],
+
     "source-map-support/source-map": ["source-map@0.6.1", "", {}, "sha512-UjgapumWlbMhkBgzT7Ykc5YXUT46F0iKu8SGXq0bcwP5dz/h0Plj6enJqjz1Zbq2l5WaqYnrVbwWOWMyF3F47g=="],
+
+    "terser/commander": ["commander@2.20.3", "", {}, "sha512-GpVkmM8vF2vQUkj2LvZmD35JxeJOLCwJ9cUkugyk2nuhbv3+mJvpLYYt+0+USMxE+oj+ey/lJEnhZw75x/OMcQ=="],
 
     "thread-stream/real-require": ["real-require@1.0.0", "", {}, "sha512-P4nbQYQfePJxRSmY+v/KINxVucm4NF3p3s7pJveMTtom52FR4YGltUQLB8idDXwDDWW+eYrWDFbuzUnjoWHF7g=="],
 

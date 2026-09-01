@@ -11,6 +11,9 @@ build/
 Thumbs.db
 
 coverage/
+test-results/
+playwright-report/
+apps/web/public/sync-assets/
 .vite/
 dev-dist/
 

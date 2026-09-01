@@ -1,6 +1,7 @@
 # Task 07: Visibility rules, revocation, and tombstone watermarks
 
-Status: pending. Depends on tasks 01, 04, and feature 04 declarations.
+Status: pending. Unit primitives exist; task 01 reviews, feature 04 declarations, and provider
+integration evidence are missing.
 
 ## Scope
 
@@ -21,4 +22,3 @@ Status: pending. Depends on tasks 01, 04, and feature 04 declarations.
 bun test packages/sync packages/authorization
 bun run guard
 ```
-

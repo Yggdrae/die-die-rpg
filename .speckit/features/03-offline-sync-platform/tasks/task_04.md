@@ -1,6 +1,6 @@
 # Task 04: PowerSync read path and authorized upload endpoint
 
-Status: pending. Depends on tasks 01 and 03.
+Status: pending. Code paths exist; task 01 review and Docker/provider integration evidence are missing.
 
 ## Scope
 
@@ -21,4 +21,3 @@ Status: pending. Depends on tasks 01 and 03.
 bun test packages/sync apps/api/src/modules/sync
 bun run typecheck
 ```
-

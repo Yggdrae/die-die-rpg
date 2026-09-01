@@ -1,6 +1,6 @@
 # Task 05: Deferred conflicts and semantic operations
 
-Status: pending. Depends on tasks 03–04.
+Status: completed. Verified with durable conflict, semantic-operation, and shared UI tests.
 
 ## Scope
 
@@ -21,4 +21,3 @@ Status: pending. Depends on tasks 03–04.
 bun test packages/sync apps/web/src/features/sync
 bun run typecheck
 ```
-

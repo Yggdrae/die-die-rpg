@@ -52,6 +52,53 @@ services:
       timeout: 5s
       retries: 10
 
+  mongo:
+    image: mongo:7
+    container_name: rpg-powersync-mongo
+    restart: unless-stopped
+    volumes:
+      - powersync-mongo-data:/data/db
+    healthcheck:
+      test: ['CMD', 'mongosh', '--quiet', '--eval', 'db.adminCommand({ ping: 1 }).ok']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  powersync:
+    image: journeyapps/powersync-service:1.25.0
+    container_name: rpg-powersync
+    restart: unless-stopped
+    command: ['start', '-r', 'unified']
+    depends_on:
+      postgres:
+        condition: service_healthy
+      mongo:
+        condition: service_healthy
+    environment:
+      POWERSYNC_CONFIG_PATH: /config/service.yaml
+      PS_DATA_SOURCE_URI: postgres://${POSTGRES_USER:-rpg}:${POSTGRES_PASSWORD:-rpg_dev_password}@postgres:5432/${POSTGRES_DB:-rpg}
+      PS_MONGO_URI: mongodb://mongo:27017/powersync
+      PS_PORT: 8080
+      PS_CLIENT_AUTH_KEY: ${POWERSYNC_JWT_SECRET:-ZGV2ZWxvcG1lbnQtb25seS1wb3dlcnN5bmMta2V5LTMyIQ}
+      PS_ADMIN_TOKEN: ${POWERSYNC_ADMIN_TOKEN:-development-only-admin-token}
+      NODE_OPTIONS: --max-old-space-size=1000
+    ports:
+      - '${POWERSYNC_PORT:-8080}:8080'
+    volumes:
+      - ./infra/powersync:/config:ro
+    healthcheck:
+      test:
+        [
+          'CMD',
+          'node',
+          '-e',
+          "fetch('http://localhost:8080/probes/liveness').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))",
+        ]
+      interval: 5s
+      timeout: 2s
+      retries: 20
+
 volumes:
   postgres-data:
   minio-data:
+  powersync-mongo-data:
