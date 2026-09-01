@@ -1,6 +1,6 @@
 # Task 07: Explicit system-version update flow
 
-Status: pending. Depends on tasks 03–04 and feature 08 exact-version resolver.
+Status: completed. Verified against the exact-version fixture catalog adapter.
 
 ## Scope
 
@@ -21,4 +21,3 @@ Status: pending. Depends on tasks 03–04 and feature 08 exact-version resolver.
 bun test packages/campaigns apps/api/src/modules/campaigns apps/web/src/features/campaigns
 bun run typecheck
 ```
-

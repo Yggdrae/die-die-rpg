@@ -1,3 +1,4 @@
+import type { SystemDefinition } from '@rpg/campaigns';
 import type { ActorRef, EntityEnvelope, SystemRef, Visibility } from '@rpg/contracts';
 import { CAMPAIGN_ID, ITEMS, LOCATIONS, NPCS, USERS } from './ids.ts';
 
@@ -25,6 +26,27 @@ const NOW = '2026-08-27T09:00:00Z';
 export const FIXTURE_SYSTEM: SystemRef = {
   systemId: 'fixture-system',
   version: '0.1.0',
+};
+
+export const FIXTURE_SYSTEM_DEFINITION: SystemDefinition = {
+  summary: {
+    ref: FIXTURE_SYSTEM,
+    name: 'Fixture System',
+    shortDescription: 'A generic test system with no product-specific behavior.',
+    complexity: 'medium',
+    documentationStatus: 'external',
+    rulesEntryPoint: 'https://example.invalid/fixture-rules',
+    integration: {
+      mechanicsSupported: true,
+      characterSheetSupported: true,
+      rulesTextIntegrated: false,
+      compendiumIntegrated: false,
+      externalDocumentation: 'https://example.invalid/fixture-rules',
+    },
+  },
+  gameModes: [{ id: 'standard', label: 'Standard' }],
+  options: [],
+  compatibleModules: [],
 };
 
 const GM_ONLY: Visibility = { mode: 'gm_only' };

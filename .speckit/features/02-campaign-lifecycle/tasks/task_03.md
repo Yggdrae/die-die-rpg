@@ -1,6 +1,6 @@
 # Task 03: Campaign application services and context resolver
 
-Status: pending. Depends on tasks 01–02.
+Status: completed.
 
 ## Scope
 
@@ -21,4 +21,3 @@ Status: pending. Depends on tasks 01–02.
 bun test packages/campaigns
 bun run typecheck
 ```
-

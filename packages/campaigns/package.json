@@ -1,5 +1,5 @@
 {
-  "name": "@rpg/fixtures",
+  "name": "@rpg/campaigns",
   "version": "0.0.0",
   "private": true,
   "type": "module",
@@ -10,8 +10,11 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@rpg/campaigns": "workspace:*",
-    "@rpg/contracts": "workspace:*"
+    "@rpg/contracts": "workspace:*",
+    "@rpg/identity": "workspace:*",
+    "@sinclair/typebox": "^0.34.48",
+    "drizzle-orm": "^0.45.2",
+    "postgres": "^3.4.9"
   },
   "devDependencies": {
     "@rpg/config": "workspace:*"

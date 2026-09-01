@@ -1,6 +1,6 @@
 # Task 01: Public campaign contracts and manifest-driven rules
 
-Status: pending. Depends on feature 08 publishing an approved catalog/manifest contract or compatible fixture.
+Status: completed. Verified with the approved non-MVP compatible fixture.
 
 ## Scope
 
@@ -22,4 +22,3 @@ bun test packages/campaigns
 bun run typecheck
 bun run guard
 ```
-

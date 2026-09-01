@@ -1,6 +1,6 @@
 # Task 05: Creation wizard and campaign list
 
-Status: pending. Depends on tasks 01 and 04.
+Status: completed.
 
 ## Scope
 
@@ -21,4 +21,3 @@ Status: pending. Depends on tasks 01 and 04.
 bun test apps/web/src/features/campaigns
 bun run build
 ```
-

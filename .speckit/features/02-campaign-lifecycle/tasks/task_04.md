@@ -1,6 +1,6 @@
 # Task 04: Fastify campaign API
 
-Status: pending. Depends on task 03 and feature 04 decision API.
+Status: completed. Includes the required feature 04 decision API.
 
 ## Scope
 
@@ -21,4 +21,3 @@ Status: pending. Depends on task 03 and feature 04 decision API.
 bun test apps/api/src/modules/campaigns packages/campaigns
 bun run typecheck
 ```
-
