@@ -4,14 +4,20 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "sync:assets": "bun ../../packages/sync/scripts/copy-browser-assets.mjs",
+    "predev": "bun run sync:assets",
+    "prebuild": "bun run sync:assets",
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@rpg/campaigns": "workspace:*",
     "@rpg/contracts": "workspace:*",
     "@rpg/fixtures": "workspace:*",
+    "@rpg/identity": "workspace:*",
+    "@rpg/sync": "workspace:*",
     "react": "^19.2.0",
     "react-dom": "^19.2.0"
   },

@@ -1,7 +1,10 @@
 import { describe, expect, test } from 'bun:test';
 import {
   checkFile,
+  noClientActorRoleClaims,
   noDeepPackageImports,
+  noExternalCampaignStoreAccess,
+  noExternalMembershipStoreAccess,
   noPackageToAppImports,
   noSystemIdentity,
 } from './rules.ts';
@@ -73,6 +76,50 @@ describe('rule: no-system-identity', () => {
     });
 
     expect(violations).toEqual([]);
+  });
+});
+
+describe('feature 01 and 02 persistence boundaries', () => {
+  test('FAILS on membership SQL outside identity', () => {
+    expect(
+      noExternalMembershipStoreAccess({
+        path: 'packages/content/src/repository.ts',
+        content: 'select role from identity_campaign_memberships',
+      }),
+    ).toHaveLength(1);
+  });
+
+  test('FAILS on campaign SQL outside campaigns', () => {
+    expect(
+      noExternalCampaignStoreAccess({
+        path: 'packages/identity/src/read.ts',
+        content: 'select * from campaigns',
+      }),
+    ).toHaveLength(1);
+  });
+
+  test('PASSES only the declared sync read adapter for replicated campaign tables', () => {
+    expect(
+      noExternalCampaignStoreAccess({
+        path: 'packages/sync/src/browser.ts',
+        content: 'campaign_settings: new Table({ campaign_id: column.text })',
+      }),
+    ).toEqual([]);
+    expect(
+      noExternalCampaignStoreAccess({
+        path: 'packages/sync/src/authority.ts',
+        content: 'select * from campaign_settings',
+      }),
+    ).toHaveLength(1);
+  });
+
+  test('FAILS on a client actor-role claim', () => {
+    expect(
+      noClientActorRoleClaims({
+        path: 'apps/api/src/bad-route.ts',
+        content: 'const Body = Type.Object({ actorRole: Type.String() });',
+      }),
+    ).toHaveLength(1);
   });
 });
 

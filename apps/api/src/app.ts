@@ -25,7 +25,13 @@ export interface BuildOptions {
 export function buildApp(options: BuildOptions = {}): FastifyInstance {
   const app = Fastify({
     logger: options.logger ?? false,
+    ajv: { customOptions: { removeAdditional: false } },
   }).withTypeProvider<TypeBoxTypeProvider>();
+
+  app.addHook('onSend', async (_request, reply) => {
+    reply.header('Cross-Origin-Opener-Policy', 'same-origin');
+    reply.header('Cross-Origin-Embedder-Policy', 'require-corp');
+  });
 
   /**
    * One error shape for every failure. Validation issues are surfaced structurally;

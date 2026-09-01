@@ -1,0 +1,22 @@
+{
+  "name": "@rpg/campaigns",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@rpg/contracts": "workspace:*",
+    "@rpg/identity": "workspace:*",
+    "@sinclair/typebox": "^0.34.48",
+    "drizzle-orm": "^0.45.2",
+    "postgres": "^3.4.9"
+  },
+  "devDependencies": {
+    "@rpg/config": "workspace:*"
+  }
+}

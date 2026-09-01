@@ -182,7 +182,62 @@ export function noPackageToAppImports(file: SourceFile): Violation[] {
   return violations;
 }
 
-export const RULES = [noSystemIdentity, noDeepPackageImports, noPackageToAppImports];
+export function noExternalMembershipStoreAccess(file: SourceFile): Violation[] {
+  if (
+    isGloballyExempt(file.path) ||
+    file.path.endsWith('.integration.test.ts') ||
+    file.path.startsWith('packages/identity/')
+  )
+    return [];
+  const pattern = /identity_campaign_memberships|membership-repository/gi;
+  return [...file.content.matchAll(pattern)].map((match) => ({
+    rule: 'no-external-membership-store-access',
+    path: file.path,
+    line: lineOf(file.content, match.index),
+    message: 'Reads or writes identity membership storage outside feature 01.',
+    remedy: 'Resolve roles through ActorResolver or use the narrow CampaignMembershipWriter.',
+  }));
+}
+
+export function noExternalCampaignStoreAccess(file: SourceFile): Violation[] {
+  if (
+    isGloballyExempt(file.path) ||
+    file.path.endsWith('.integration.test.ts') ||
+    file.path.startsWith('packages/campaigns/') ||
+    file.path === 'packages/sync/src/browser.ts'
+  )
+    return [];
+  const pattern =
+    /campaign_(?:system_pins|module_pins|settings)|from\s+campaigns\b|into\s+campaigns\b/gi;
+  return [...file.content.matchAll(pattern)].map((match) => ({
+    rule: 'no-external-campaign-store-access',
+    path: file.path,
+    line: lineOf(file.content, match.index),
+    message: 'Reads or writes campaign persistence outside feature 02.',
+    remedy: 'Use CampaignContextResolver or the public campaign application boundary.',
+  }));
+}
+
+export function noClientActorRoleClaims(file: SourceFile): Violation[] {
+  if (isGloballyExempt(file.path) || !file.path.startsWith('apps/')) return [];
+  const pattern = /\b(?:actorRole|authenticatedRole|resolvedRole|campaignRole)\s*:/g;
+  return [...file.content.matchAll(pattern)].map((match) => ({
+    rule: 'no-client-actor-role-claims',
+    path: file.path,
+    line: lineOf(file.content, match.index),
+    message: 'Declares a client-supplied role as actor identity.',
+    remedy: 'Authenticate the user, then resolve the current role through ActorResolver.',
+  }));
+}
+
+export const RULES = [
+  noSystemIdentity,
+  noDeepPackageImports,
+  noPackageToAppImports,
+  noExternalMembershipStoreAccess,
+  noExternalCampaignStoreAccess,
+  noClientActorRoleClaims,
+];
 
 export function checkFile(file: SourceFile): Violation[] {
   return RULES.flatMap((rule) => rule(file));
