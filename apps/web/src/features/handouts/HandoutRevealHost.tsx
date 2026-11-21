@@ -35,23 +35,7 @@ export function HandoutRevealHost(props: {
   const source = props.source;
   const available = source !== undefined && request.actor.campaignId === source.campaignId;
   return (
-    <div
-      role="dialog"
-      aria-modal="true"
-      aria-label="Reveal handout"
-      style={{
-        position: 'fixed',
-        inset: '5% auto auto 50%',
-        transform: 'translateX(-50%)',
-        background: 'Canvas',
-        color: 'CanvasText',
-        border: '1px solid',
-        padding: '1rem',
-        zIndex: 10,
-        maxHeight: '90vh',
-        overflow: 'auto',
-      }}
-    >
+    <div role="dialog" aria-modal="true" aria-label="Reveal handout">
       {available ? (
         <HandoutsWorkspace
           source={source}

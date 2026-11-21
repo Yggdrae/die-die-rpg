@@ -29,22 +29,7 @@ export function EncounterHost(props: { readonly source?: EncounterSource }) {
   const source = props.source;
   const available = source !== undefined && request.actor.campaignId === source.campaignId;
   return (
-    <div
-      role="dialog"
-      aria-modal="true"
-      aria-label="Encounter tracker"
-      style={{
-        position: 'fixed',
-        inset: '5% 5% auto 5%',
-        maxHeight: '90vh',
-        overflow: 'auto',
-        background: 'Canvas',
-        color: 'CanvasText',
-        border: '1px solid',
-        padding: '1rem',
-        zIndex: 10,
-      }}
-    >
+    <div role="dialog" aria-modal="true" aria-label="Encounter tracker">
       {available ? (
         <EncounterWorkspace source={source} sessionId={request.sessionId} starting />
       ) : (

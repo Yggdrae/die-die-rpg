@@ -6,6 +6,7 @@ import {
   rememberDeviceSession,
 } from './features/identity/device-session.ts';
 import { IdentityFlow } from './features/identity/IdentityFlow.tsx';
+import { Brand } from './shell.tsx';
 
 export function App() {
   const path = typeof window === 'undefined' ? '/' : window.location.pathname;
@@ -42,23 +43,19 @@ export function App() {
     );
   }
   return (
-    <main
-      style={{
-        fontFamily: 'system-ui, sans-serif',
-        padding: '2rem',
-        lineHeight: 1.5,
-        maxWidth: 720,
-      }}
-    >
-      <IdentityFlow
-        invitationToken={invitationToken}
-        onAuthenticated={(joinedCampaignId, authenticatedUserId) => {
-          rememberDeviceSession({ userId: authenticatedUserId });
-          setCampaignId(joinedCampaignId);
-          setUserId(authenticatedUserId);
-          setAuthenticated(true);
-        }}
-      />
+    <main className="auth-shell">
+      <div className="auth-card">
+        <Brand />
+        <IdentityFlow
+          invitationToken={invitationToken}
+          onAuthenticated={(joinedCampaignId, authenticatedUserId) => {
+            rememberDeviceSession({ userId: authenticatedUserId });
+            setCampaignId(joinedCampaignId);
+            setUserId(authenticatedUserId);
+            setAuthenticated(true);
+          }}
+        />
+      </div>
     </main>
   );
 }

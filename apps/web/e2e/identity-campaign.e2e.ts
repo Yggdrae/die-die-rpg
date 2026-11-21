@@ -122,7 +122,7 @@ test('signup creates, invites, and deletes a manifest-driven campaign', async ({
   await page.getByLabel('Optional first invitation').selectOption('player');
   await page.getByRole('button', { name: 'Create campaign' }).click();
 
-  await expect(page.getByText('Road Game', { exact: true })).toBeVisible();
+  await expect(page.getByRole('listitem').getByText('Road Game', { exact: true })).toBeVisible();
   expect(createdInvitationRole).toBe('player');
   await page.getByRole('button', { name: 'Create invitation' }).click();
   await expect(page.getByText(invitationToken)).toBeVisible();

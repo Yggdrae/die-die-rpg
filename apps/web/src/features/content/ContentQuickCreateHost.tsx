@@ -38,16 +38,6 @@ export function ContentQuickCreateHost(props: { readonly source?: ContentSource 
       aria-modal="true"
       aria-label="Quick create"
       data-quick-create-overlay={request.entry.id}
-      style={{
-        position: 'fixed',
-        inset: '10% auto auto 50%',
-        transform: 'translateX(-50%)',
-        background: 'Canvas',
-        color: 'CanvasText',
-        border: '1px solid',
-        padding: '1rem',
-        zIndex: 10,
-      }}
     >
       {available ? (
         <QuickCreateForm

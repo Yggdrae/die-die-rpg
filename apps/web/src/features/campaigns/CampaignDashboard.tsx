@@ -5,6 +5,7 @@ import { INSTALLED_SYSTEM_PACKAGES } from '@rpg/installed-systems';
 import { type SystemPackage, systemDefinitionOf } from '@rpg/systems';
 import { type FormEvent, useCallback, useEffect, useMemo, useReducer, useState } from 'react';
 import { apiRequest } from '../../api.ts';
+import { Brand, Panel, SideNav } from '../../shell.tsx';
 import { OfflineAttachments } from '../attachments/OfflineAttachments.tsx';
 import { CampaignHistory } from '../audit/CampaignHistory.tsx';
 import {
@@ -99,9 +100,17 @@ export function CampaignDashboard(props: {
   const [preview, setPreview] = useState<SystemPackage>();
   const [error, setError] = useState<string>();
   const [state, dispatch] = useReducer(wizardReducer, initialWizardState());
+  // The campaign the user picked from the list; without a pick, the joined, first, or last-opened one.
+  const [selectedCampaignId, setSelectedCampaignId] = useState<string>();
+  const selected =
+    selectedCampaignId !== undefined && campaigns.some(({ id }) => id === selectedCampaignId)
+      ? selectedCampaignId
+      : undefined;
   const syncedCampaignId =
+    selected ??
     props.initialCampaignId ??
     (campaignList === 'loaded' ? campaigns[0]?.id : (campaigns[0]?.id ?? props.lastCampaignId));
+  const activeCampaign = campaigns.find(({ id }) => id === syncedCampaignId) ?? campaigns[0];
   const sync = useBrowserSync(props.userId, syncedCampaignId);
   // Feature 15: the campaign's characters over the local replica (offline-capable).
   const characters = useMemo(
@@ -266,29 +275,63 @@ export function CampaignDashboard(props: {
         });
       }
       setCampaigns((current) => [campaign, ...current]);
+      setSelectedCampaignId(campaign.id);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : 'Campaign creation failed.');
     }
   }
 
+  // Feature areas render only once the replica is open; the navigation lists what is on screen.
+  const playAreas = [
+    ...(search === undefined ? [] : [{ id: 'area-search', label: 'Search' }]),
+    ...(sessions === undefined ? [] : [{ id: 'area-session', label: 'Session Mode' }]),
+    ...(encounters === undefined ? [] : [{ id: 'area-encounters', label: 'Encounters' }]),
+    ...(characters === undefined ? [] : [{ id: 'area-characters', label: 'Characters' }]),
+    ...(content === undefined
+      ? []
+      : [
+          { id: 'area-content', label: 'Content' },
+          { id: 'area-handouts', label: 'Handouts' },
+        ]),
+    ...(rules === undefined ? [] : [{ id: 'area-rules', label: 'Rules' }]),
+  ];
+  const campaignAreas = [
+    { id: 'area-campaigns', label: 'Your campaigns' },
+    ...(activeCampaign === undefined ? [] : [{ id: 'area-manage', label: 'Manage' }]),
+    ...(syncedCampaignId === undefined ? [] : [{ id: 'area-export', label: 'Export' }]),
+    { id: 'area-create', label: 'New campaign' },
+    { id: 'area-import', label: 'Import' },
+  ];
+
   return (
-    <main>
-      <header>
-        <h1>Campaigns</h1>
-        {props.initialCampaignId !== undefined && <p>Joined campaign {props.initialCampaignId}.</p>}
-        {sync.status !== undefined && <SyncStatusIndicator status={sync.status} />}
-        <button
-          type="button"
-          onClick={() =>
-            apiRequest<void>('/auth/session', { method: 'DELETE' })
-              .then(() => sync.signOut().catch(() => undefined))
-              .then(onLogout)
-          }
-        >
-          Log out
-        </button>
+    <div className="app-shell">
+      <header className="topbar">
+        <Brand />
+        <div className="topbar-campaign">
+          <h1>Campaigns</h1>
+          {activeCampaign !== undefined && (
+            <>
+              <strong>{activeCampaign.name}</strong>
+              <small>
+                {activeCampaign.system.systemId}@{activeCampaign.system.version}
+              </small>
+            </>
+          )}
+        </div>
+        <div className="topbar-actions">
+          {sync.status !== undefined && <SyncStatusIndicator status={sync.status} />}
+          <button
+            type="button"
+            onClick={() =>
+              apiRequest<void>('/auth/session', { method: 'DELETE' })
+                .then(() => sync.signOut().catch(() => undefined))
+                .then(onLogout)
+            }
+          >
+            Log out
+          </button>
+        </div>
       </header>
-      {search !== undefined && <SearchWorkspace service={search} />}
       {/* Feature 16 D-14: the one quick-create overlay for session quick actions. */}
       <ContentQuickCreateHost {...(content === undefined ? {} : { source: content })} />
       {/* Feature 17 D-08: the reveal overlay for the session quick action. */}
@@ -299,294 +342,365 @@ export function CampaignDashboard(props: {
       />
       {/* Feature 19 D-11: the tracker overlay for the session quick action. */}
       <EncounterHost {...(encounters === undefined ? {} : { source: encounters })} />
-      {sessions !== undefined && (
-        <SessionWorkspace
-          source={sessions}
-          quickActions={SESSION_QUICK_ACTIONS}
-          {...(paletteProviders === undefined ? {} : { paletteProviders })}
+      <div className="layout">
+        <SideNav
+          groups={[
+            { label: 'Play', areas: playAreas },
+            { label: 'Campaign', areas: campaignAreas },
+          ]}
         />
-      )}
-      {encounters !== undefined && <EncounterWorkspace source={encounters} />}
-      {rules !== undefined && <RulesLibrary source={rules} />}
-      {characters !== undefined && <CharacterWorkspace source={characters} />}
-      {content !== undefined && <HandoutsWorkspace source={content} />}
-      {content !== undefined && <ContentWorkspace source={content} />}
-      <section aria-labelledby="campaign-list-title">
-        <h2 id="campaign-list-title">Your campaigns</h2>
-        {campaignList === 'unavailable' ? (
-          <p role="status">The campaign list needs a connection. Local content stays available.</p>
-        ) : campaigns.length === 0 ? (
-          <p>No campaign yet.</p>
-        ) : (
-          <ul>
-            {campaigns.map((campaign) => (
-              <li key={campaign.id}>
-                <strong>{campaign.name}</strong>{' '}
-                <small>
-                  {campaign.system.systemId}@{campaign.system.version}
-                </small>
-              </li>
-            ))}
-          </ul>
-        )}
-      </section>
-      <section aria-labelledby="wizard-title">
-        <h2 id="wizard-title">Create campaign</h2>
-        <search>
-          <form
-            onSubmit={(event) => {
-              event.preventDefault();
-              searchSystems(systemQuery).catch(() => setError('System catalog unavailable.'));
-            }}
-          >
-            <label>
-              Search systems
-              <input value={systemQuery} onChange={(event) => setSystemQuery(event.target.value)} />
-            </label>
-            <button type="submit">Search</button>
-          </form>
-        </search>
-        {/* Feature 14 FR-008: the rules before a campaign exists, outside the creation form; the selection does
-            not change. */}
-        {preview !== undefined && (
-          <RulesPreview system={preview} onClose={() => setPreview(undefined)} />
-        )}
-        <form onSubmit={create}>
-          <fieldset>
-            <legend>System</legend>
-            {systems.map((system) => {
-              const { integration } = system.summary;
-              const installed = installedPackage(system.summary.ref);
-              return (
-                <div key={`${system.summary.ref.systemId}@${system.summary.ref.version}`}>
-                  <label>
-                    <input
-                      type="radio"
-                      name="system"
-                      checked={state.system?.summary.ref.systemId === system.summary.ref.systemId}
-                      onChange={() => dispatch({ type: 'select_system', system })}
-                    />
-                    {system.summary.name} — {system.summary.shortDescription}
-                    <small>{integrationStatus(integration)}</small>
-                  </label>{' '}
-                  <a href={system.summary.rulesEntryPoint} target="_blank" rel="noreferrer">
-                    Rules for {system.summary.name}
-                  </a>{' '}
-                  {installed !== undefined && (
-                    <button type="button" onClick={() => setPreview(installed)}>
-                      Preview rules of {system.summary.name}
-                    </button>
-                  )}
-                </div>
-              );
-            })}
-            {systems.length === 0 && <p>No installed system matches.</p>}
-          </fieldset>
-          {state.system !== undefined && (
-            <fieldset>
-              <legend>Game mode</legend>
-              {state.system.gameModes.map((mode) => (
-                <label key={mode.id}>
-                  <input
-                    type="radio"
-                    name="gameMode"
-                    checked={state.gameMode === mode.id}
-                    onChange={() => dispatch({ type: 'select_mode', gameMode: mode.id })}
-                  />
-                  {mode.label}
-                </label>
-              ))}
-            </fieldset>
+        <main className="content">
+          {props.initialCampaignId !== undefined && (
+            <p className="joined-note">Joined campaign {props.initialCampaignId}.</p>
           )}
-          {state.system !== undefined && state.system.options.length > 0 && (
-            <fieldset>
-              <legend>System options</legend>
-              {state.system.options.map((option) => {
-                const value = state.options[option.key] ?? option.default;
-                if (option.type === 'boolean') {
-                  return (
-                    <label key={option.key}>
-                      <input
-                        type="checkbox"
-                        checked={value === true}
-                        onChange={(event) =>
-                          dispatch({
-                            type: 'set_option',
-                            key: option.key,
-                            value: event.target.checked,
-                          })
-                        }
-                      />
-                      {option.label}
-                    </label>
-                  );
-                }
-                if (option.type === 'select') {
-                  return (
-                    <label key={option.key}>
-                      {option.label}
-                      <select
-                        value={String(value)}
-                        onChange={(event) =>
-                          dispatch({
-                            type: 'set_option',
-                            key: option.key,
-                            value: event.target.value,
-                          })
-                        }
+          <Panel id="area-campaigns">
+            <section aria-labelledby="campaign-list-title">
+              <h2 id="campaign-list-title">Your campaigns</h2>
+              {campaignList === 'unavailable' ? (
+                <p role="status">
+                  The campaign list needs a connection. Local content stays available.
+                </p>
+              ) : campaigns.length === 0 ? (
+                <p className="empty-state">No campaign yet.</p>
+              ) : (
+                <ul className="campaign-list">
+                  {campaigns.map((campaign) => (
+                    <li key={campaign.id}>
+                      <button
+                        type="button"
+                        aria-pressed={campaign.id === activeCampaign?.id}
+                        onClick={() => setSelectedCampaignId(campaign.id)}
                       >
-                        {option.values.map((choice) => (
-                          <option key={choice} value={choice}>
-                            {choice}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
-                  );
-                }
-                return (
-                  <label key={option.key}>
-                    {option.label}
+                        <strong>{campaign.name}</strong>
+                        <small>
+                          {campaign.system.systemId}@{campaign.system.version}
+                        </small>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </section>
+          </Panel>
+          {search !== undefined && (
+            <Panel id="area-search">
+              <SearchWorkspace service={search} />
+            </Panel>
+          )}
+          {sessions !== undefined && (
+            <Panel id="area-session">
+              <SessionWorkspace
+                source={sessions}
+                quickActions={SESSION_QUICK_ACTIONS}
+                {...(paletteProviders === undefined ? {} : { paletteProviders })}
+              />
+            </Panel>
+          )}
+          {encounters !== undefined && (
+            <Panel id="area-encounters">
+              <EncounterWorkspace source={encounters} />
+            </Panel>
+          )}
+          {characters !== undefined && (
+            <Panel id="area-characters">
+              <CharacterWorkspace source={characters} />
+            </Panel>
+          )}
+          {content !== undefined && (
+            <Panel id="area-content">
+              <ContentWorkspace source={content} />
+            </Panel>
+          )}
+          {content !== undefined && (
+            <Panel id="area-handouts">
+              <HandoutsWorkspace source={content} />
+            </Panel>
+          )}
+          {rules !== undefined && (
+            <Panel id="area-rules">
+              <RulesLibrary source={rules} />
+            </Panel>
+          )}
+          {activeCampaign !== undefined && (
+            <Panel id="area-manage">
+              <div className="panel-group">
+                <CampaignAdmin
+                  key={activeCampaign.id}
+                  campaign={activeCampaign}
+                  userId={props.userId}
+                  onCampaignUpdated={(updated) =>
+                    setCampaigns((current) =>
+                      current.map((campaign) => (campaign.id === updated.id ? updated : campaign)),
+                    )
+                  }
+                  onCampaignDeleted={(deletedId) =>
+                    setCampaigns((current) =>
+                      current.filter((campaign) => campaign.id !== deletedId),
+                    )
+                  }
+                />
+                <CampaignHistory
+                  key={`history-${activeCampaign.id}`}
+                  campaignId={activeCampaign.id}
+                  {...(props.userId === undefined ? {} : { userId: props.userId })}
+                  readLocal={(input) => sync.readLocalAudit(activeCampaign.id, input)}
+                />
+                {sync.attachments !== undefined && (
+                  <details>
+                    <summary>Offline attachments</summary>
+                    <OfflineAttachments campaignId={activeCampaign.id} store={sync.attachments} />
+                  </details>
+                )}
+              </div>
+            </Panel>
+          )}
+          {syncedCampaignId !== undefined && (
+            <Panel id="area-export">
+              <details>
+                <summary>Export</summary>
+                <CampaignExport
+                  campaignId={syncedCampaignId}
+                  offline={browserReplicaExportSource({
+                    ...(sync.session === undefined ? {} : { session: sync.session }),
+                    displayName: 'Game master',
+                    // The browser has no build version yet; the API default is the same.
+                    applicationVersion: '0.0.0',
+                  })}
+                />
+              </details>
+            </Panel>
+          )}
+          <Panel id="area-create">
+            <section aria-labelledby="wizard-title">
+              <h2 id="wizard-title">Create campaign</h2>
+              <search>
+                <form
+                  onSubmit={(event) => {
+                    event.preventDefault();
+                    searchSystems(systemQuery).catch(() => setError('System catalog unavailable.'));
+                  }}
+                >
+                  <label>
+                    Search systems
                     <input
-                      value={String(value)}
-                      minLength={option.minLength}
-                      maxLength={option.maxLength}
-                      onChange={(event) =>
-                        dispatch({ type: 'set_option', key: option.key, value: event.target.value })
-                      }
+                      value={systemQuery}
+                      onChange={(event) => setSystemQuery(event.target.value)}
                     />
                   </label>
-                );
-              })}
-            </fieldset>
-          )}
-          {state.system !== undefined && state.system.compatibleModules.length > 0 && (
-            <fieldset>
-              <legend>Modules</legend>
-              {state.system.compatibleModules.map((module) => (
-                <label key={module.id}>
+                  <button type="submit">Search</button>
+                </form>
+              </search>
+              {/* Feature 14 FR-008: the rules before a campaign exists, outside the creation form; the selection does
+                not change. */}
+              {preview !== undefined && (
+                <RulesPreview system={preview} onClose={() => setPreview(undefined)} />
+              )}
+              <form onSubmit={create}>
+                <fieldset>
+                  <legend>System</legend>
+                  {systems.map((system) => {
+                    const { integration } = system.summary;
+                    const installed = installedPackage(system.summary.ref);
+                    return (
+                      <div key={`${system.summary.ref.systemId}@${system.summary.ref.version}`}>
+                        <label>
+                          <input
+                            type="radio"
+                            name="system"
+                            checked={
+                              state.system?.summary.ref.systemId === system.summary.ref.systemId
+                            }
+                            onChange={() => dispatch({ type: 'select_system', system })}
+                          />
+                          {system.summary.name} — {system.summary.shortDescription}
+                          <small>{integrationStatus(integration)}</small>
+                        </label>{' '}
+                        <a href={system.summary.rulesEntryPoint} target="_blank" rel="noreferrer">
+                          Rules for {system.summary.name}
+                        </a>{' '}
+                        {installed !== undefined && (
+                          <button type="button" onClick={() => setPreview(installed)}>
+                            Preview rules of {system.summary.name}
+                          </button>
+                        )}
+                      </div>
+                    );
+                  })}
+                  {systems.length === 0 && <p>No installed system matches.</p>}
+                </fieldset>
+                {state.system !== undefined && (
+                  <fieldset>
+                    <legend>Game mode</legend>
+                    {state.system.gameModes.map((mode) => (
+                      <label key={mode.id}>
+                        <input
+                          type="radio"
+                          name="gameMode"
+                          checked={state.gameMode === mode.id}
+                          onChange={() => dispatch({ type: 'select_mode', gameMode: mode.id })}
+                        />
+                        {mode.label}
+                      </label>
+                    ))}
+                  </fieldset>
+                )}
+                {state.system !== undefined && state.system.options.length > 0 && (
+                  <fieldset>
+                    <legend>System options</legend>
+                    {state.system.options.map((option) => {
+                      const value = state.options[option.key] ?? option.default;
+                      if (option.type === 'boolean') {
+                        return (
+                          <label key={option.key}>
+                            <input
+                              type="checkbox"
+                              checked={value === true}
+                              onChange={(event) =>
+                                dispatch({
+                                  type: 'set_option',
+                                  key: option.key,
+                                  value: event.target.checked,
+                                })
+                              }
+                            />
+                            {option.label}
+                          </label>
+                        );
+                      }
+                      if (option.type === 'select') {
+                        return (
+                          <label key={option.key}>
+                            {option.label}
+                            <select
+                              value={String(value)}
+                              onChange={(event) =>
+                                dispatch({
+                                  type: 'set_option',
+                                  key: option.key,
+                                  value: event.target.value,
+                                })
+                              }
+                            >
+                              {option.values.map((choice) => (
+                                <option key={choice} value={choice}>
+                                  {choice}
+                                </option>
+                              ))}
+                            </select>
+                          </label>
+                        );
+                      }
+                      return (
+                        <label key={option.key}>
+                          {option.label}
+                          <input
+                            value={String(value)}
+                            minLength={option.minLength}
+                            maxLength={option.maxLength}
+                            onChange={(event) =>
+                              dispatch({
+                                type: 'set_option',
+                                key: option.key,
+                                value: event.target.value,
+                              })
+                            }
+                          />
+                        </label>
+                      );
+                    })}
+                  </fieldset>
+                )}
+                {state.system !== undefined && state.system.compatibleModules.length > 0 && (
+                  <fieldset>
+                    <legend>Modules</legend>
+                    {state.system.compatibleModules.map((module) => (
+                      <label key={module.id}>
+                        <input
+                          type="checkbox"
+                          checked={state.moduleIds.includes(module.id)}
+                          onChange={() => dispatch({ type: 'toggle_module', moduleId: module.id })}
+                        />
+                        {module.name}
+                      </label>
+                    ))}
+                  </fieldset>
+                )}
+                <label>
+                  Campaign name
                   <input
-                    type="checkbox"
-                    checked={state.moduleIds.includes(module.id)}
-                    onChange={() => dispatch({ type: 'toggle_module', moduleId: module.id })}
+                    value={state.name}
+                    maxLength={120}
+                    required
+                    onChange={(event) =>
+                      dispatch({
+                        type: 'set_details',
+                        name: event.target.value,
+                        description: state.description,
+                      })
+                    }
                   />
-                  {module.name}
                 </label>
-              ))}
-            </fieldset>
-          )}
-          <label>
-            Campaign name
-            <input
-              value={state.name}
-              maxLength={120}
-              required
-              onChange={(event) =>
-                dispatch({
-                  type: 'set_details',
-                  name: event.target.value,
-                  description: state.description,
-                })
-              }
+                <label>
+                  Description
+                  <textarea
+                    value={state.description}
+                    maxLength={10_000}
+                    onChange={(event) =>
+                      dispatch({
+                        type: 'set_details',
+                        name: state.name,
+                        description: event.target.value,
+                      })
+                    }
+                  />
+                </label>
+                <label>
+                  Optional first invitation
+                  <select
+                    value={state.invitationRole ?? ''}
+                    onChange={(event) =>
+                      dispatch({
+                        type: 'set_invitation_role',
+                        role:
+                          event.target.value === ''
+                            ? undefined
+                            : (event.target.value as 'gm' | 'assistant_gm' | 'player'),
+                      })
+                    }
+                  >
+                    <option value="">None</option>
+                    <option value="gm">GM</option>
+                    <option value="assistant_gm">Assistant GM</option>
+                    <option value="player">Player</option>
+                  </select>
+                </label>
+                <button type="submit">Create campaign</button>
+                {state.system !== undefined &&
+                  state.gameMode !== undefined &&
+                  state.name.trim() !== '' && (
+                    <p>
+                      Review: {state.name.trim()} — {state.system.summary.name}, {state.gameMode};{' '}
+                      {state.moduleIds.length} module(s).
+                    </p>
+                  )}
+                {error !== undefined && <p role="alert">{error}</p>}
+              </form>
+            </section>
+          </Panel>
+          <Panel id="area-import">
+            <CampaignImport
+              onImported={() => {
+                apiRequest<CampaignView[]>('/campaigns')
+                  .then((listed) => {
+                    setCampaigns(listed);
+                    setCampaignList('loaded');
+                  })
+                  .catch(() => undefined);
+              }}
             />
-          </label>
-          <label>
-            Description
-            <textarea
-              value={state.description}
-              maxLength={10_000}
-              onChange={(event) =>
-                dispatch({
-                  type: 'set_details',
-                  name: state.name,
-                  description: event.target.value,
-                })
-              }
-            />
-          </label>
-          <label>
-            Optional first invitation
-            <select
-              value={state.invitationRole ?? ''}
-              onChange={(event) =>
-                dispatch({
-                  type: 'set_invitation_role',
-                  role:
-                    event.target.value === ''
-                      ? undefined
-                      : (event.target.value as 'gm' | 'assistant_gm' | 'player'),
-                })
-              }
-            >
-              <option value="">None</option>
-              <option value="gm">GM</option>
-              <option value="assistant_gm">Assistant GM</option>
-              <option value="player">Player</option>
-            </select>
-          </label>
-          <button type="submit">Create campaign</button>
-          {state.system !== undefined &&
-            state.gameMode !== undefined &&
-            state.name.trim() !== '' && (
-              <p>
-                Review: {state.name.trim()} — {state.system.summary.name}, {state.gameMode};{' '}
-                {state.moduleIds.length} module(s).
-              </p>
-            )}
-          {error !== undefined && <p role="alert">{error}</p>}
-        </form>
-      </section>
-      <CampaignImport
-        onImported={() => {
-          apiRequest<CampaignView[]>('/campaigns')
-            .then((listed) => {
-              setCampaigns(listed);
-              setCampaignList('loaded');
-            })
-            .catch(() => undefined);
-        }}
-      />
-      {campaigns[0] !== undefined && (
-        <CampaignHistory
-          campaignId={campaigns[0].id}
-          {...(props.userId === undefined ? {} : { userId: props.userId })}
-          readLocal={(input) => sync.readLocalAudit(campaigns[0]?.id ?? '', input)}
-        />
-      )}
-      {campaigns[0] !== undefined && sync.attachments !== undefined && (
-        <details>
-          <summary>Offline attachments</summary>
-          <OfflineAttachments campaignId={campaigns[0].id} store={sync.attachments} />
-        </details>
-      )}
-      {syncedCampaignId !== undefined && (
-        <details>
-          <summary>Export</summary>
-          <CampaignExport
-            campaignId={syncedCampaignId}
-            offline={browserReplicaExportSource({
-              ...(sync.session === undefined ? {} : { session: sync.session }),
-              displayName: 'Game master',
-              // The browser has no build version yet; the API default is the same.
-              applicationVersion: '0.0.0',
-            })}
-          />
-        </details>
-      )}
-      {campaigns[0] !== undefined && (
-        <CampaignAdmin
-          campaign={campaigns[0]}
-          userId={props.userId}
-          onCampaignUpdated={(updated) =>
-            setCampaigns((current) =>
-              current.map((campaign) => (campaign.id === updated.id ? updated : campaign)),
-            )
-          }
-          onCampaignDeleted={(deletedId) =>
-            setCampaigns((current) => current.filter((campaign) => campaign.id !== deletedId))
-          }
-        />
-      )}
-    </main>
+          </Panel>
+        </main>
+      </div>
+    </div>
   );
 }

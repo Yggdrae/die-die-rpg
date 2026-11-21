@@ -29,22 +29,7 @@ export function CommandPalette(props: {
   };
 
   return (
-    <div
-      role="dialog"
-      aria-modal="true"
-      aria-label="Command palette"
-      style={{
-        position: 'fixed',
-        inset: '10% auto auto 50%',
-        transform: 'translateX(-50%)',
-        width: 'min(32rem, 90vw)',
-        background: 'Canvas',
-        color: 'CanvasText',
-        border: '1px solid',
-        padding: '0.75rem',
-        zIndex: 20,
-      }}
-    >
+    <div role="dialog" aria-modal="true" aria-label="Command palette">
       <input
         ref={input}
         aria-label="Command"
@@ -70,7 +55,6 @@ export function CommandPalette(props: {
             run(current);
           }
         }}
-        style={{ width: '100%' }}
       />
       <ul id={listId} aria-label="Results">
         {results.map((entry) => (
@@ -78,7 +62,6 @@ export function CommandPalette(props: {
             <button
               type="button"
               aria-current={entry === current ? 'true' : undefined}
-              style={{ fontWeight: entry === current ? 'bold' : undefined }}
               onClick={() => run(entry)}
             >
               {entry.label}
