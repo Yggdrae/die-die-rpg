@@ -1,0 +1,780 @@
+{
+  "contractVersion": 1,
+  "manifest": {
+    "ref": { "systemId": "cairn-2e", "version": "1.0.0" },
+    "name": "Cairn 2e",
+    "shortDescription": "Rules-light adventure play: three attributes, saves, hit protection that gives way to attributes, and slot inventory.",
+    "complexity": "low",
+    "languages": ["en"],
+    "integration": {
+      "mechanicsSupported": true,
+      "characterSheetSupported": true,
+      "rulesTextIntegrated": false,
+      "compendiumIntegrated": false,
+      "externalDocumentation": "https://cairnrpg.com/second-edition/players-guide/core-rules/"
+    },
+    "license": {
+      "license": "CC BY-SA 4.0",
+      "source": "https://cairnrpg.com/second-edition/",
+      "version": "4.0",
+      "attribution": "Mechanics declared from Cairn Second Edition by Yochai Gal, whose text is licensed under CC BY-SA 4.0 (https://creativecommons.org/licenses/by-sa/4.0/). This declaration is shared under the same licence. Not affiliated with or endorsed by the author.",
+      "redistributionStatus": "allowed",
+      "translationStatus": "allowed",
+      "brandUsageStatus": "review-required",
+      "assets": {
+        "rulesText": "allowed",
+        "mechanics": "allowed",
+        "officialArtwork": "forbidden",
+        "officialLogo": "forbidden"
+      }
+    },
+    "rulesEntryPoint": "https://cairnrpg.com/second-edition/players-guide/core-rules/",
+    "compatibleModules": []
+  },
+  "capabilities": [
+    "character_sheet",
+    "dice_rolls",
+    "resource_pools",
+    "conditions",
+    "inventory_slots"
+  ],
+  "characterSchema": {
+    "fields": [
+      { "key": "name", "label": "Name", "group": "identity", "type": "text", "maxLength": 80 },
+      {
+        "key": "background",
+        "label": "Background",
+        "group": "identity",
+        "type": "text",
+        "maxLength": 120
+      },
+      { "key": "traits", "label": "Traits", "group": "identity", "type": "list" },
+      {
+        "key": "STR",
+        "label": "Strength",
+        "group": "attributes",
+        "type": "number",
+        "min": 0,
+        "default": 10
+      },
+      {
+        "key": "DEX",
+        "label": "Dexterity",
+        "group": "attributes",
+        "type": "number",
+        "min": 0,
+        "default": 10
+      },
+      {
+        "key": "WIL",
+        "label": "Willpower",
+        "group": "attributes",
+        "type": "number",
+        "min": 0,
+        "default": 10
+      },
+      {
+        "key": "hp_max",
+        "label": "Maximum HP",
+        "group": "protection",
+        "type": "number",
+        "min": 0,
+        "default": 3
+      },
+      {
+        "key": "hp",
+        "label": "HP",
+        "group": "protection",
+        "type": "resource",
+        "resourceKey": "hp"
+      },
+      {
+        "key": "armor",
+        "label": "Armor",
+        "group": "protection",
+        "type": "number",
+        "min": 0,
+        "max": 3,
+        "default": 0
+      },
+      {
+        "key": "gold",
+        "label": "Gold",
+        "group": "gear",
+        "type": "counter",
+        "min": 0,
+        "default": 0
+      },
+      {
+        "key": "pack",
+        "label": "Inventory",
+        "group": "gear",
+        "type": "inventory",
+        "inventoryKey": "pack"
+      },
+      {
+        "key": "spellbooks",
+        "label": "Spellbooks",
+        "group": "gear",
+        "type": "repeater",
+        "of": [
+          { "key": "spell", "label": "Spell", "group": "gear", "type": "text", "maxLength": 120 },
+          { "key": "notes", "label": "Notes", "group": "gear", "type": "rich_text" }
+        ]
+      },
+      { "key": "afflictions", "label": "Conditions", "group": "status", "type": "condition" }
+    ],
+    "summaryFields": ["name", "hp", "STR"]
+  },
+  "resources": [
+    {
+      "key": "hp",
+      "label": "HP",
+      "shape": "pool",
+      "min": 0,
+      "max": { "formula": "hp_max" },
+      "default": { "formula": "hp_max" },
+      "temporary": false,
+      "visibility": "everyone",
+      "spendable": false,
+      "recovery": [{ "trigger": "brief_rest", "label": "A brief rest restores it" }]
+    }
+  ],
+  "actions": [
+    {
+      "key": "save",
+      "label": "Save",
+      "roll": { "dice": "1d20" },
+      "inputs": ["STR", "DEX", "WIL"],
+      "picks": [{ "name": "attribute", "label": "Attribute", "fields": ["STR", "DEX", "WIL"] }],
+      "outcomes": [
+        {
+          "id": "natural_one",
+          "label": "A 1 always succeeds",
+          "when": { "formula": "natural == 1" },
+          "resolution": { "mode": "apply", "effects": [] }
+        },
+        {
+          "id": "natural_twenty",
+          "label": "A 20 always fails",
+          "when": { "formula": "natural == 20" },
+          "resolution": { "mode": "apply", "effects": [] }
+        },
+        {
+          "id": "success",
+          "label": "Success",
+          "when": { "formula": "roll <= attribute" },
+          "resolution": { "mode": "apply", "effects": [] }
+        },
+        { "id": "failure", "label": "Failure", "resolution": { "mode": "apply", "effects": [] } }
+      ]
+    },
+    {
+      "key": "critical_damage_save",
+      "label": "Strength save against critical damage",
+      "roll": { "dice": "1d20" },
+      "inputs": ["STR"],
+      "outcomes": [
+        {
+          "id": "natural_one",
+          "label": "A 1 always succeeds",
+          "when": { "formula": "natural == 1" },
+          "resolution": { "mode": "apply", "effects": [] }
+        },
+        {
+          "id": "natural_twenty",
+          "label": "A 20 always fails: critical damage",
+          "when": { "formula": "natural == 20" },
+          "resolution": {
+            "mode": "apply",
+            "effects": [{ "effect": "add_condition", "params": { "condition": "critical_damage" } }]
+          }
+        },
+        {
+          "id": "success",
+          "label": "Success",
+          "when": { "formula": "roll <= STR" },
+          "resolution": { "mode": "apply", "effects": [] }
+        },
+        {
+          "id": "failure",
+          "label": "Critical damage",
+          "resolution": {
+            "mode": "apply",
+            "effects": [{ "effect": "add_condition", "params": { "condition": "critical_damage" } }]
+          }
+        }
+      ]
+    },
+    {
+      "key": "take_damage_d4",
+      "label": "Take d4 damage",
+      "roll": { "dice": "1d4" },
+      "inputs": ["armor", "STR", "hp"],
+      "outcomes": [
+        {
+          "id": "deflected",
+          "label": "Armor stops it",
+          "when": { "formula": "roll - min(armor, 3) <= 0" },
+          "resolution": { "mode": "apply", "effects": [] }
+        },
+        {
+          "id": "fatal",
+          "label": "Past HP, and Strength reaches 0",
+          "when": { "formula": "roll - min(armor, 3) - hp >= STR" },
+          "resolution": {
+            "mode": "apply",
+            "effects": [
+              {
+                "effect": "apply_damage",
+                "params": { "resource": "hp", "amount": { "formula": "hp" } }
+              },
+              {
+                "effect": "modify_field",
+                "params": { "field": "STR", "amount": { "formula": "hp + min(armor, 3) - roll" } }
+              },
+              { "effect": "add_condition", "params": { "condition": "dead" } }
+            ]
+          }
+        },
+        {
+          "id": "spills",
+          "label": "Past HP, into Strength",
+          "when": { "formula": "roll - min(armor, 3) > hp" },
+          "resolution": {
+            "mode": "apply",
+            "effects": [
+              {
+                "effect": "apply_damage",
+                "params": { "resource": "hp", "amount": { "formula": "hp" } }
+              },
+              {
+                "effect": "modify_field",
+                "params": { "field": "STR", "amount": { "formula": "hp + min(armor, 3) - roll" } }
+              },
+              { "effect": "execute_roll", "params": { "action": "critical_damage_save" } }
+            ]
+          }
+        },
+        {
+          "id": "scar",
+          "label": "Exactly to 0 HP: a scar",
+          "when": { "formula": "roll - min(armor, 3) == hp" },
+          "resolution": {
+            "mode": "apply",
+            "effects": [
+              {
+                "effect": "apply_damage",
+                "params": { "resource": "hp", "amount": { "formula": "roll - min(armor, 3)" } }
+              },
+              { "effect": "add_condition", "params": { "condition": "scar" } }
+            ]
+          }
+        },
+        {
+          "id": "absorbed",
+          "label": "HP absorbs it",
+          "resolution": {
+            "mode": "apply",
+            "effects": [
+              {
+                "effect": "apply_damage",
+                "params": { "resource": "hp", "amount": { "formula": "roll - min(armor, 3)" } }
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "key": "take_damage_d6",
+      "label": "Take d6 damage",
+      "roll": { "dice": "1d6" },
+      "inputs": ["armor", "STR", "hp"],
+      "outcomes": [
+        {
+          "id": "deflected",
+          "label": "Armor stops it",
+          "when": { "formula": "roll - min(armor, 3) <= 0" },
+          "resolution": { "mode": "apply", "effects": [] }
+        },
+        {
+          "id": "fatal",
+          "label": "Past HP, and Strength reaches 0",
+          "when": { "formula": "roll - min(armor, 3) - hp >= STR" },
+          "resolution": {
+            "mode": "apply",
+            "effects": [
+              {
+                "effect": "apply_damage",
+                "params": { "resource": "hp", "amount": { "formula": "hp" } }
+              },
+              {
+                "effect": "modify_field",
+                "params": { "field": "STR", "amount": { "formula": "hp + min(armor, 3) - roll" } }
+              },
+              { "effect": "add_condition", "params": { "condition": "dead" } }
+            ]
+          }
+        },
+        {
+          "id": "spills",
+          "label": "Past HP, into Strength",
+          "when": { "formula": "roll - min(armor, 3) > hp" },
+          "resolution": {
+            "mode": "apply",
+            "effects": [
+              {
+                "effect": "apply_damage",
+                "params": { "resource": "hp", "amount": { "formula": "hp" } }
+              },
+              {
+                "effect": "modify_field",
+                "params": { "field": "STR", "amount": { "formula": "hp + min(armor, 3) - roll" } }
+              },
+              { "effect": "execute_roll", "params": { "action": "critical_damage_save" } }
+            ]
+          }
+        },
+        {
+          "id": "scar",
+          "label": "Exactly to 0 HP: a scar",
+          "when": { "formula": "roll - min(armor, 3) == hp" },
+          "resolution": {
+            "mode": "apply",
+            "effects": [
+              {
+                "effect": "apply_damage",
+                "params": { "resource": "hp", "amount": { "formula": "roll - min(armor, 3)" } }
+              },
+              { "effect": "add_condition", "params": { "condition": "scar" } }
+            ]
+          }
+        },
+        {
+          "id": "absorbed",
+          "label": "HP absorbs it",
+          "resolution": {
+            "mode": "apply",
+            "effects": [
+              {
+                "effect": "apply_damage",
+                "params": { "resource": "hp", "amount": { "formula": "roll - min(armor, 3)" } }
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "key": "take_damage_d8",
+      "label": "Take d8 damage",
+      "roll": { "dice": "1d8" },
+      "inputs": ["armor", "STR", "hp"],
+      "outcomes": [
+        {
+          "id": "deflected",
+          "label": "Armor stops it",
+          "when": { "formula": "roll - min(armor, 3) <= 0" },
+          "resolution": { "mode": "apply", "effects": [] }
+        },
+        {
+          "id": "fatal",
+          "label": "Past HP, and Strength reaches 0",
+          "when": { "formula": "roll - min(armor, 3) - hp >= STR" },
+          "resolution": {
+            "mode": "apply",
+            "effects": [
+              {
+                "effect": "apply_damage",
+                "params": { "resource": "hp", "amount": { "formula": "hp" } }
+              },
+              {
+                "effect": "modify_field",
+                "params": { "field": "STR", "amount": { "formula": "hp + min(armor, 3) - roll" } }
+              },
+              { "effect": "add_condition", "params": { "condition": "dead" } }
+            ]
+          }
+        },
+        {
+          "id": "spills",
+          "label": "Past HP, into Strength",
+          "when": { "formula": "roll - min(armor, 3) > hp" },
+          "resolution": {
+            "mode": "apply",
+            "effects": [
+              {
+                "effect": "apply_damage",
+                "params": { "resource": "hp", "amount": { "formula": "hp" } }
+              },
+              {
+                "effect": "modify_field",
+                "params": { "field": "STR", "amount": { "formula": "hp + min(armor, 3) - roll" } }
+              },
+              { "effect": "execute_roll", "params": { "action": "critical_damage_save" } }
+            ]
+          }
+        },
+        {
+          "id": "scar",
+          "label": "Exactly to 0 HP: a scar",
+          "when": { "formula": "roll - min(armor, 3) == hp" },
+          "resolution": {
+            "mode": "apply",
+            "effects": [
+              {
+                "effect": "apply_damage",
+                "params": { "resource": "hp", "amount": { "formula": "roll - min(armor, 3)" } }
+              },
+              { "effect": "add_condition", "params": { "condition": "scar" } }
+            ]
+          }
+        },
+        {
+          "id": "absorbed",
+          "label": "HP absorbs it",
+          "resolution": {
+            "mode": "apply",
+            "effects": [
+              {
+                "effect": "apply_damage",
+                "params": { "resource": "hp", "amount": { "formula": "roll - min(armor, 3)" } }
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "key": "take_damage_d10",
+      "label": "Take d10 damage",
+      "roll": { "dice": "1d10" },
+      "inputs": ["armor", "STR", "hp"],
+      "outcomes": [
+        {
+          "id": "deflected",
+          "label": "Armor stops it",
+          "when": { "formula": "roll - min(armor, 3) <= 0" },
+          "resolution": { "mode": "apply", "effects": [] }
+        },
+        {
+          "id": "fatal",
+          "label": "Past HP, and Strength reaches 0",
+          "when": { "formula": "roll - min(armor, 3) - hp >= STR" },
+          "resolution": {
+            "mode": "apply",
+            "effects": [
+              {
+                "effect": "apply_damage",
+                "params": { "resource": "hp", "amount": { "formula": "hp" } }
+              },
+              {
+                "effect": "modify_field",
+                "params": { "field": "STR", "amount": { "formula": "hp + min(armor, 3) - roll" } }
+              },
+              { "effect": "add_condition", "params": { "condition": "dead" } }
+            ]
+          }
+        },
+        {
+          "id": "spills",
+          "label": "Past HP, into Strength",
+          "when": { "formula": "roll - min(armor, 3) > hp" },
+          "resolution": {
+            "mode": "apply",
+            "effects": [
+              {
+                "effect": "apply_damage",
+                "params": { "resource": "hp", "amount": { "formula": "hp" } }
+              },
+              {
+                "effect": "modify_field",
+                "params": { "field": "STR", "amount": { "formula": "hp + min(armor, 3) - roll" } }
+              },
+              { "effect": "execute_roll", "params": { "action": "critical_damage_save" } }
+            ]
+          }
+        },
+        {
+          "id": "scar",
+          "label": "Exactly to 0 HP: a scar",
+          "when": { "formula": "roll - min(armor, 3) == hp" },
+          "resolution": {
+            "mode": "apply",
+            "effects": [
+              {
+                "effect": "apply_damage",
+                "params": { "resource": "hp", "amount": { "formula": "roll - min(armor, 3)" } }
+              },
+              { "effect": "add_condition", "params": { "condition": "scar" } }
+            ]
+          }
+        },
+        {
+          "id": "absorbed",
+          "label": "HP absorbs it",
+          "resolution": {
+            "mode": "apply",
+            "effects": [
+              {
+                "effect": "apply_damage",
+                "params": { "resource": "hp", "amount": { "formula": "roll - min(armor, 3)" } }
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "key": "take_damage_d12",
+      "label": "Take d12 damage",
+      "roll": { "dice": "1d12" },
+      "inputs": ["armor", "STR", "hp"],
+      "outcomes": [
+        {
+          "id": "deflected",
+          "label": "Armor stops it",
+          "when": { "formula": "roll - min(armor, 3) <= 0" },
+          "resolution": { "mode": "apply", "effects": [] }
+        },
+        {
+          "id": "fatal",
+          "label": "Past HP, and Strength reaches 0",
+          "when": { "formula": "roll - min(armor, 3) - hp >= STR" },
+          "resolution": {
+            "mode": "apply",
+            "effects": [
+              {
+                "effect": "apply_damage",
+                "params": { "resource": "hp", "amount": { "formula": "hp" } }
+              },
+              {
+                "effect": "modify_field",
+                "params": { "field": "STR", "amount": { "formula": "hp + min(armor, 3) - roll" } }
+              },
+              { "effect": "add_condition", "params": { "condition": "dead" } }
+            ]
+          }
+        },
+        {
+          "id": "spills",
+          "label": "Past HP, into Strength",
+          "when": { "formula": "roll - min(armor, 3) > hp" },
+          "resolution": {
+            "mode": "apply",
+            "effects": [
+              {
+                "effect": "apply_damage",
+                "params": { "resource": "hp", "amount": { "formula": "hp" } }
+              },
+              {
+                "effect": "modify_field",
+                "params": { "field": "STR", "amount": { "formula": "hp + min(armor, 3) - roll" } }
+              },
+              { "effect": "execute_roll", "params": { "action": "critical_damage_save" } }
+            ]
+          }
+        },
+        {
+          "id": "scar",
+          "label": "Exactly to 0 HP: a scar",
+          "when": { "formula": "roll - min(armor, 3) == hp" },
+          "resolution": {
+            "mode": "apply",
+            "effects": [
+              {
+                "effect": "apply_damage",
+                "params": { "resource": "hp", "amount": { "formula": "roll - min(armor, 3)" } }
+              },
+              { "effect": "add_condition", "params": { "condition": "scar" } }
+            ]
+          }
+        },
+        {
+          "id": "absorbed",
+          "label": "HP absorbs it",
+          "resolution": {
+            "mode": "apply",
+            "effects": [
+              {
+                "effect": "apply_damage",
+                "params": { "resource": "hp", "amount": { "formula": "roll - min(armor, 3)" } }
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "key": "cast_spell",
+      "label": "Cast from a spellbook",
+      "inputs": [],
+      "outcomes": [
+        {
+          "id": "cast",
+          "label": "Cast, and gain fatigue",
+          "resolution": {
+            "mode": "apply",
+            "effects": [{ "effect": "add_condition", "params": { "condition": "fatigue" } }]
+          }
+        }
+      ]
+    },
+    {
+      "key": "gain_fatigue",
+      "label": "Gain fatigue",
+      "inputs": [],
+      "outcomes": [
+        {
+          "id": "gained",
+          "label": "Gain fatigue",
+          "resolution": {
+            "mode": "apply",
+            "effects": [{ "effect": "add_condition", "params": { "condition": "fatigue" } }]
+          }
+        }
+      ]
+    },
+    {
+      "key": "clear_fatigue",
+      "label": "Clear one fatigue",
+      "inputs": [],
+      "outcomes": [
+        {
+          "id": "cleared",
+          "label": "Clear one fatigue",
+          "resolution": {
+            "mode": "apply",
+            "effects": [{ "effect": "remove_condition", "params": { "condition": "fatigue" } }]
+          }
+        }
+      ]
+    },
+    {
+      "key": "mark_deprived",
+      "label": "Mark deprived",
+      "inputs": [],
+      "outcomes": [
+        {
+          "id": "marked",
+          "label": "Mark deprived",
+          "resolution": {
+            "mode": "apply",
+            "effects": [{ "effect": "add_condition", "params": { "condition": "deprived" } }]
+          }
+        }
+      ]
+    },
+    {
+      "key": "clear_deprived",
+      "label": "Clear deprived",
+      "inputs": [],
+      "outcomes": [
+        {
+          "id": "cleared",
+          "label": "Clear deprived",
+          "resolution": {
+            "mode": "apply",
+            "effects": [{ "effect": "remove_condition", "params": { "condition": "deprived" } }]
+          }
+        }
+      ]
+    },
+    {
+      "key": "stabilize",
+      "label": "Stabilize critical damage",
+      "inputs": [],
+      "outcomes": [
+        {
+          "id": "stabilized",
+          "label": "Clear critical damage",
+          "resolution": {
+            "mode": "apply",
+            "effects": [
+              { "effect": "remove_condition", "params": { "condition": "critical_damage" } }
+            ]
+          }
+        }
+      ]
+    }
+  ],
+  "mechanics": {
+    "conditions": [
+      {
+        "key": "fatigue",
+        "label": "Fatigue",
+        "stacking": "count",
+        "occupiesSlots": 1,
+        "visibility": "everyone"
+      },
+      { "key": "deprived", "label": "Deprived", "stacking": "single", "visibility": "everyone" },
+      { "key": "scar", "label": "Scar", "stacking": "count", "visibility": "everyone" },
+      {
+        "key": "critical_damage",
+        "label": "Critical damage",
+        "stacking": "single",
+        "visibility": "everyone"
+      },
+      { "key": "paralyzed", "label": "Paralyzed", "stacking": "single", "visibility": "everyone" },
+      { "key": "delirious", "label": "Delirious", "stacking": "single", "visibility": "everyone" },
+      { "key": "dead", "label": "Dead", "stacking": "single", "visibility": "everyone" }
+    ],
+    "inventory": { "key": "pack", "label": "Inventory", "capacity": 10, "unit": "slots" },
+    "ladders": []
+  },
+  "rules": {
+    "sections": [
+      {
+        "id": "attributes",
+        "title": "Attributes",
+        "category": "core_mechanics",
+        "references": ["saves"]
+      },
+      {
+        "id": "saves",
+        "title": "Saves",
+        "category": "core_mechanics",
+        "references": ["attributes"]
+      },
+      {
+        "id": "recovery",
+        "title": "Healing and recovery",
+        "category": "core_mechanics",
+        "references": ["deprivation"]
+      },
+      {
+        "id": "deprivation",
+        "title": "Deprivation and fatigue",
+        "category": "core_mechanics",
+        "references": ["recovery"]
+      },
+      { "id": "armor", "title": "Armor", "category": "combat", "references": ["combat"] },
+      {
+        "id": "combat",
+        "title": "Combat",
+        "category": "combat",
+        "references": ["armor", "critical_damage", "scars"]
+      },
+      {
+        "id": "critical_damage",
+        "title": "Critical damage",
+        "category": "combat",
+        "references": ["combat"]
+      },
+      { "id": "scars", "title": "Scars", "category": "combat", "references": ["combat"] },
+      {
+        "id": "magic",
+        "title": "Magic and spellbooks",
+        "category": "magic",
+        "references": ["deprivation"]
+      }
+    ]
+  },
+  "compendiums": [],
+  "options": [],
+  "gameModes": [
+    { "id": "gm-players", "label": "GM + Players" },
+    { "id": "theatre-of-the-mind", "label": "Theatre of the Mind" }
+  ]
+}

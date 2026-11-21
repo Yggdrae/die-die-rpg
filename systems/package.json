@@ -1,0 +1,21 @@
+{
+  "name": "@rpg/installed-systems",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@rpg/actions": "workspace:*",
+    "@rpg/dice": "workspace:*",
+    "@rpg/formula": "workspace:*",
+    "@rpg/systems": "workspace:*"
+  },
+  "devDependencies": {
+    "@rpg/config": "workspace:*"
+  }
+}
