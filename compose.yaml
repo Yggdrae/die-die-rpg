@@ -41,6 +41,9 @@ services:
     environment:
       MINIO_ROOT_USER: ${MINIO_ROOT_USER:-rpg}
       MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-rpg_dev_password}
+      # Feature 05: MinIO has no per-bucket CORS (PutBucketCors), only this server-wide origin
+      # allowlist. Without it every origin is echoed with credentials. Methods cannot be narrowed.
+      MINIO_API_CORS_ALLOW_ORIGIN: ${S3_CORS_ALLOW_ORIGIN:-http://localhost:5173,http://127.0.0.1:4173}
     ports:
       - '${MINIO_PORT:-9000}:9000'
       - '${MINIO_CONSOLE_PORT:-9001}:9001'
@@ -52,17 +55,91 @@ services:
       timeout: 5s
       retries: 10
 
+  # One-shot (feature 05 task 01): the private attachment bucket and a least-privilege signing user.
+  # Root credentials stay inside this container; the API signs with the bucket-scoped user only.
+  # Anonymous access is none (no public read, no listing). Safe to re-run.
+  minio-bucket:
+    image: minio/minio:latest
+    container_name: rpg-minio-bucket
+    restart: 'no'
+    depends_on:
+      minio:
+        condition: service_healthy
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-rpg}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-rpg_dev_password}
+      S3_BUCKET: ${S3_BUCKET:-rpg-attachments}
+      S3_ACCESS_KEY_ID: ${S3_ACCESS_KEY_ID:-rpg-attachments}
+      S3_SECRET_ACCESS_KEY: ${S3_SECRET_ACCESS_KEY:-rpg_attachments_dev_secret}
+      MC_CONFIG_DIR: /tmp/.mc
+    entrypoint: ['sh', '-c']
+    command:
+      - |
+        set -e
+        mc alias set local http://minio:9000 "$$MINIO_ROOT_USER" "$$MINIO_ROOT_PASSWORD" >/dev/null
+        mc mb --ignore-existing "local/$$S3_BUCKET"
+        mc anonymous set none "local/$$S3_BUCKET"
+        cat > /tmp/attachments-policy.json <<EOF
+        {"Version":"2012-10-17","Statement":[
+          {"Effect":"Allow","Action":["s3:GetObject","s3:PutObject","s3:DeleteObject"],"Resource":["arn:aws:s3:::$$S3_BUCKET/*"]},
+          {"Effect":"Allow","Action":["s3:ListBucket"],"Resource":["arn:aws:s3:::$$S3_BUCKET"]}
+        ]}
+        EOF
+        mc admin policy create local rpg-attachments /tmp/attachments-policy.json
+        mc admin user add local "$$S3_ACCESS_KEY_ID" "$$S3_SECRET_ACCESS_KEY"
+        mc admin policy attach local rpg-attachments --user "$$S3_ACCESS_KEY_ID" 2>/dev/null || true
+
   mongo:
     image: mongo:7
     container_name: rpg-powersync-mongo
     restart: unless-stopped
+    # PowerSync bucket storage uses MongoDB transactions, which need a replica set (a standalone
+    # mongod fails with "Transaction numbers are only allowed on a replica set member").
+    command: ['--replSet', 'rs0', '--bind_ip_all', '--quiet']
     volumes:
       - powersync-mongo-data:/data/db
     healthcheck:
-      test: ['CMD', 'mongosh', '--quiet', '--eval', 'db.adminCommand({ ping: 1 }).ok']
+      # Initiates the single-member replica set on first run; healthy once it is primary.
+      test:
+        [
+          'CMD',
+          'mongosh',
+          '--quiet',
+          '--eval',
+          "try { rs.status().ok } catch (e) { rs.initiate({ _id: 'rs0', members: [{ _id: 0, host: 'mongo:27017' }] }).ok }",
+        ]
       interval: 5s
       timeout: 5s
       retries: 10
+
+  # One-shot: gives the dedicated replication role its password (migration
+  # `0006_powersync_replication_role` owns the role and its SELECT-only grants, and never holds a
+  # secret). Safe to re-run; it creates a bare role when the migration has not run yet, and the
+  # migration then adopts it. Production sets the password from its own secret store instead.
+  powersync-replication-role:
+    image: postgres:17-alpine
+    container_name: rpg-powersync-replication-role
+    restart: 'no'
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      PGHOST: postgres
+      PGUSER: ${POSTGRES_USER:-rpg}
+      PGPASSWORD: ${POSTGRES_PASSWORD:-rpg_dev_password}
+      PGDATABASE: ${POSTGRES_DB:-rpg}
+      REPLICATION_PASSWORD: ${POWERSYNC_REPLICATION_PASSWORD:-powersync_replication_dev_password}
+    entrypoint: ['sh', '-c']
+    command:
+      - |
+        psql -v ON_ERROR_STOP=1 -v pw="$$REPLICATION_PASSWORD" <<'SQL'
+        DO $$$$ BEGIN
+          IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'powersync_replicator') THEN
+            CREATE ROLE powersync_replicator LOGIN REPLICATION;
+          END IF;
+        END $$$$;
+        ALTER ROLE powersync_replicator WITH LOGIN REPLICATION PASSWORD :'pw';
+        SQL
 
   powersync:
     image: journeyapps/powersync-service:1.25.0
@@ -74,9 +151,13 @@ services:
         condition: service_healthy
       mongo:
         condition: service_healthy
+      powersync-replication-role:
+        condition: service_completed_successfully
     environment:
       POWERSYNC_CONFIG_PATH: /config/service.yaml
-      PS_DATA_SOURCE_URI: postgres://${POSTGRES_USER:-rpg}:${POSTGRES_PASSWORD:-rpg_dev_password}@postgres:5432/${POSTGRES_DB:-rpg}
+      # Dedicated least-privilege role (REPLICATION + SELECT on the published tables only), never the
+      # database owner. URL-encode the password if it holds reserved characters.
+      PS_DATA_SOURCE_URI: postgres://powersync_replicator:${POWERSYNC_REPLICATION_PASSWORD:-powersync_replication_dev_password}@postgres:5432/${POSTGRES_DB:-rpg}
       PS_MONGO_URI: mongodb://mongo:27017/powersync
       PS_PORT: 8080
       PS_CLIENT_AUTH_KEY: ${POWERSYNC_JWT_SECRET:-ZGV2ZWxvcG1lbnQtb25seS1wb3dlcnN5bmMta2V5LTMyIQ}
@@ -97,6 +178,17 @@ services:
       interval: 5s
       timeout: 2s
       retries: 20
+
+  # Feature 03 browser matrix (`bun run test:e2e:matrix`): Firefox and WebKit on Linux, any host.
+  # An unauthenticated browser controller, so only ever published on loopback; opt-in by profile.
+  playwright-browsers:
+    image: mcr.microsoft.com/playwright:v1.62.1-noble
+    container_name: rpg-playwright
+    profiles: ['e2e-browsers']
+    init: true
+    command: npx -y playwright@1.62.1 run-server --port 3000 --host 0.0.0.0
+    ports:
+      - '127.0.0.1:3000:3000'
 
 volumes:
   postgres-data:

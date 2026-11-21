@@ -17,28 +17,57 @@
       "version": "0.0.0",
       "dependencies": {
         "@fastify/type-provider-typebox": "^5.2.0",
+        "@rpg/actions": "workspace:*",
+        "@rpg/attachments": "workspace:*",
+        "@rpg/audit": "workspace:*",
         "@rpg/authorization": "workspace:*",
+        "@rpg/campaign-portability": "workspace:*",
         "@rpg/campaigns": "workspace:*",
+        "@rpg/characters": "workspace:*",
+        "@rpg/content": "workspace:*",
         "@rpg/contracts": "workspace:*",
+        "@rpg/dice": "workspace:*",
+        "@rpg/encounters": "workspace:*",
         "@rpg/fixtures": "workspace:*",
+        "@rpg/formula": "workspace:*",
         "@rpg/identity": "workspace:*",
+        "@rpg/installed-systems": "workspace:*",
+        "@rpg/rules": "workspace:*",
+        "@rpg/sessions": "workspace:*",
         "@rpg/sync": "workspace:*",
+        "@rpg/systems": "workspace:*",
         "@sinclair/typebox": "^0.34.48",
         "fastify": "^5.7.1",
       },
       "devDependencies": {
         "@rpg/config": "workspace:*",
+        "drizzle-orm": "^0.45.2",
+        "postgres": "^3.4.9",
       },
     },
     "apps/web": {
       "name": "@rpg/web",
       "version": "0.0.0",
       "dependencies": {
+        "@rpg/actions": "workspace:*",
+        "@rpg/attachments": "workspace:*",
+        "@rpg/authorization": "workspace:*",
+        "@rpg/campaign-portability": "workspace:*",
         "@rpg/campaigns": "workspace:*",
+        "@rpg/characters": "workspace:*",
+        "@rpg/content": "workspace:*",
         "@rpg/contracts": "workspace:*",
+        "@rpg/dice": "workspace:*",
+        "@rpg/encounters": "workspace:*",
         "@rpg/fixtures": "workspace:*",
+        "@rpg/formula": "workspace:*",
         "@rpg/identity": "workspace:*",
+        "@rpg/installed-systems": "workspace:*",
+        "@rpg/rules": "workspace:*",
+        "@rpg/search": "workspace:*",
+        "@rpg/sessions": "workspace:*",
         "@rpg/sync": "workspace:*",
+        "@rpg/systems": "workspace:*",
         "react": "^19.2.0",
         "react-dom": "^19.2.0",
       },
@@ -47,15 +76,78 @@
         "@types/react": "^19.2.2",
         "@types/react-dom": "^19.2.2",
         "@vitejs/plugin-react": "^5.0.4",
+        "drizzle-orm": "^0.45.2",
+        "postgres": "^3.4.9",
         "vite": "^7.1.13",
         "vite-plugin-pwa": "^1.0.4",
+      },
+    },
+    "packages/actions": {
+      "name": "@rpg/actions",
+      "version": "0.0.0",
+      "dependencies": {
+        "@rpg/authorization": "workspace:*",
+        "@rpg/contracts": "workspace:*",
+        "@rpg/dice": "workspace:*",
+        "@rpg/formula": "workspace:*",
+        "@rpg/systems": "workspace:*",
+        "@sinclair/typebox": "^0.34.48",
+        "drizzle-orm": "^0.45.2",
+        "postgres": "^3.4.9",
+      },
+      "devDependencies": {
+        "@rpg/config": "workspace:*",
+      },
+    },
+    "packages/attachments": {
+      "name": "@rpg/attachments",
+      "version": "0.0.0",
+      "dependencies": {
+        "@rpg/audit": "workspace:*",
+        "@rpg/authorization": "workspace:*",
+        "@rpg/contracts": "workspace:*",
+        "@sinclair/typebox": "^0.34.48",
+        "drizzle-orm": "^0.45.2",
+        "postgres": "^3.4.9",
+      },
+      "devDependencies": {
+        "@rpg/config": "workspace:*",
+      },
+    },
+    "packages/audit": {
+      "name": "@rpg/audit",
+      "version": "0.0.0",
+      "dependencies": {
+        "@rpg/contracts": "workspace:*",
+        "@sinclair/typebox": "^0.34.48",
+        "drizzle-orm": "^0.45.2",
+        "postgres": "^3.4.9",
+      },
+      "devDependencies": {
+        "@rpg/config": "workspace:*",
       },
     },
     "packages/authorization": {
       "name": "@rpg/authorization",
       "version": "0.0.0",
       "dependencies": {
+        "@rpg/audit": "workspace:*",
         "@rpg/contracts": "workspace:*",
+      },
+      "devDependencies": {
+        "@rpg/config": "workspace:*",
+        "drizzle-orm": "^0.45.2",
+        "postgres": "^3.4.9",
+      },
+    },
+    "packages/campaign-portability": {
+      "name": "@rpg/campaign-portability",
+      "version": "0.0.0",
+      "dependencies": {
+        "@rpg/contracts": "workspace:*",
+        "@sinclair/typebox": "^0.34.48",
+        "drizzle-orm": "^0.45.2",
+        "postgres": "^3.4.9",
       },
       "devDependencies": {
         "@rpg/config": "workspace:*",
@@ -65,8 +157,10 @@
       "name": "@rpg/campaigns",
       "version": "0.0.0",
       "dependencies": {
+        "@rpg/authorization": "workspace:*",
         "@rpg/contracts": "workspace:*",
         "@rpg/identity": "workspace:*",
+        "@rpg/systems": "workspace:*",
         "@sinclair/typebox": "^0.34.48",
         "drizzle-orm": "^0.45.2",
         "postgres": "^3.4.9",
@@ -75,9 +169,43 @@
         "@rpg/config": "workspace:*",
       },
     },
+    "packages/characters": {
+      "name": "@rpg/characters",
+      "version": "0.0.0",
+      "dependencies": {
+        "@rpg/actions": "workspace:*",
+        "@rpg/authorization": "workspace:*",
+        "@rpg/contracts": "workspace:*",
+        "@rpg/formula": "workspace:*",
+        "@rpg/systems": "workspace:*",
+        "@sinclair/typebox": "^0.34.48",
+        "drizzle-orm": "^0.45.2",
+        "postgres": "^3.4.9",
+      },
+      "devDependencies": {
+        "@rpg/config": "workspace:*",
+        "@rpg/dice": "workspace:*",
+        "@rpg/fixtures": "workspace:*",
+        "@rpg/installed-systems": "workspace:*",
+      },
+    },
     "packages/config": {
       "name": "@rpg/config",
       "version": "0.0.0",
+    },
+    "packages/content": {
+      "name": "@rpg/content",
+      "version": "0.0.0",
+      "dependencies": {
+        "@rpg/authorization": "workspace:*",
+        "@rpg/contracts": "workspace:*",
+        "@sinclair/typebox": "^0.34.48",
+        "drizzle-orm": "^0.45.2",
+        "postgres": "^3.4.9",
+      },
+      "devDependencies": {
+        "@rpg/config": "workspace:*",
+      },
     },
     "packages/contracts": {
       "name": "@rpg/contracts",
@@ -89,11 +217,55 @@
         "@rpg/config": "workspace:*",
       },
     },
+    "packages/dice": {
+      "name": "@rpg/dice",
+      "version": "0.0.0",
+      "dependencies": {
+        "@rpg/authorization": "workspace:*",
+        "@rpg/contracts": "workspace:*",
+        "@sinclair/typebox": "^0.34.48",
+        "drizzle-orm": "^0.45.2",
+        "postgres": "^3.4.9",
+      },
+      "devDependencies": {
+        "@rpg/config": "workspace:*",
+      },
+    },
+    "packages/encounters": {
+      "name": "@rpg/encounters",
+      "version": "0.0.0",
+      "dependencies": {
+        "@rpg/actions": "workspace:*",
+        "@rpg/authorization": "workspace:*",
+        "@rpg/characters": "workspace:*",
+        "@rpg/contracts": "workspace:*",
+        "@rpg/systems": "workspace:*",
+        "@sinclair/typebox": "^0.34.48",
+        "drizzle-orm": "^0.45.2",
+        "postgres": "^3.4.9",
+      },
+      "devDependencies": {
+        "@rpg/config": "workspace:*",
+        "@rpg/fixtures": "workspace:*",
+        "@rpg/installed-systems": "workspace:*",
+      },
+    },
     "packages/fixtures": {
       "name": "@rpg/fixtures",
       "version": "0.0.0",
       "dependencies": {
         "@rpg/campaigns": "workspace:*",
+        "@rpg/contracts": "workspace:*",
+        "@rpg/systems": "workspace:*",
+      },
+      "devDependencies": {
+        "@rpg/config": "workspace:*",
+      },
+    },
+    "packages/formula": {
+      "name": "@rpg/formula",
+      "version": "0.0.0",
+      "dependencies": {
         "@rpg/contracts": "workspace:*",
       },
       "devDependencies": {
@@ -105,6 +277,49 @@
       "version": "0.0.0",
       "dependencies": {
         "@node-rs/argon2": "^2.0.2",
+        "@rpg/contracts": "workspace:*",
+        "@sinclair/typebox": "^0.34.48",
+        "drizzle-orm": "^0.45.2",
+        "postgres": "^3.4.9",
+      },
+      "devDependencies": {
+        "@rpg/config": "workspace:*",
+      },
+    },
+    "packages/rules": {
+      "name": "@rpg/rules",
+      "version": "0.0.0",
+      "dependencies": {
+        "@rpg/authorization": "workspace:*",
+        "@rpg/contracts": "workspace:*",
+        "@rpg/search": "workspace:*",
+        "@rpg/systems": "workspace:*",
+        "@sinclair/typebox": "^0.34.48",
+        "drizzle-orm": "^0.45.2",
+        "postgres": "^3.4.9",
+      },
+      "devDependencies": {
+        "@rpg/config": "workspace:*",
+        "@rpg/fixtures": "workspace:*",
+        "@rpg/installed-systems": "workspace:*",
+      },
+    },
+    "packages/search": {
+      "name": "@rpg/search",
+      "version": "0.0.0",
+      "dependencies": {
+        "@rpg/contracts": "workspace:*",
+      },
+      "devDependencies": {
+        "@rpg/config": "workspace:*",
+      },
+    },
+    "packages/sessions": {
+      "name": "@rpg/sessions",
+      "version": "0.0.0",
+      "dependencies": {
+        "@rpg/authorization": "workspace:*",
+        "@rpg/content": "workspace:*",
         "@rpg/contracts": "workspace:*",
         "@sinclair/typebox": "^0.34.48",
         "drizzle-orm": "^0.45.2",
@@ -130,11 +345,36 @@
         "@rpg/config": "workspace:*",
       },
     },
+    "packages/systems": {
+      "name": "@rpg/systems",
+      "version": "0.0.0",
+      "dependencies": {
+        "@rpg/contracts": "workspace:*",
+        "@sinclair/typebox": "^0.34.48",
+      },
+      "devDependencies": {
+        "@rpg/config": "workspace:*",
+      },
+    },
+    "systems": {
+      "name": "@rpg/installed-systems",
+      "version": "0.0.0",
+      "dependencies": {
+        "@rpg/actions": "workspace:*",
+        "@rpg/dice": "workspace:*",
+        "@rpg/formula": "workspace:*",
+        "@rpg/systems": "workspace:*",
+      },
+      "devDependencies": {
+        "@rpg/config": "workspace:*",
+      },
+    },
     "tools/guard": {
       "name": "@rpg/guard",
       "version": "0.0.0",
       "devDependencies": {
         "@rpg/config": "workspace:*",
+        "@rpg/contracts": "workspace:*",
         "@rpg/fixtures": "workspace:*",
       },
     },
@@ -534,23 +774,51 @@
 
     "@rollup/rollup-win32-x64-msvc": ["@rollup/rollup-win32-x64-msvc@4.63.0", "", { "os": "win32", "cpu": "x64" }, "sha512-hncn90N4sOky0L2LKE5oESKLbxCPeVo4eLA2LSMoDzM+879ml4WSr+Rr4DWknNIVVvS1Hirkc9hx02W6YxS8rQ=="],
 
+    "@rpg/actions": ["@rpg/actions@workspace:packages/actions"],
+
     "@rpg/api": ["@rpg/api@workspace:apps/api"],
+
+    "@rpg/attachments": ["@rpg/attachments@workspace:packages/attachments"],
+
+    "@rpg/audit": ["@rpg/audit@workspace:packages/audit"],
 
     "@rpg/authorization": ["@rpg/authorization@workspace:packages/authorization"],
 
+    "@rpg/campaign-portability": ["@rpg/campaign-portability@workspace:packages/campaign-portability"],
+
     "@rpg/campaigns": ["@rpg/campaigns@workspace:packages/campaigns"],
+
+    "@rpg/characters": ["@rpg/characters@workspace:packages/characters"],
 
     "@rpg/config": ["@rpg/config@workspace:packages/config"],
 
+    "@rpg/content": ["@rpg/content@workspace:packages/content"],
+
     "@rpg/contracts": ["@rpg/contracts@workspace:packages/contracts"],
 
+    "@rpg/dice": ["@rpg/dice@workspace:packages/dice"],
+
+    "@rpg/encounters": ["@rpg/encounters@workspace:packages/encounters"],
+
     "@rpg/fixtures": ["@rpg/fixtures@workspace:packages/fixtures"],
+
+    "@rpg/formula": ["@rpg/formula@workspace:packages/formula"],
 
     "@rpg/guard": ["@rpg/guard@workspace:tools/guard"],
 
     "@rpg/identity": ["@rpg/identity@workspace:packages/identity"],
 
+    "@rpg/installed-systems": ["@rpg/installed-systems@workspace:systems"],
+
+    "@rpg/rules": ["@rpg/rules@workspace:packages/rules"],
+
+    "@rpg/search": ["@rpg/search@workspace:packages/search"],
+
+    "@rpg/sessions": ["@rpg/sessions@workspace:packages/sessions"],
+
     "@rpg/sync": ["@rpg/sync@workspace:packages/sync"],
+
+    "@rpg/systems": ["@rpg/systems@workspace:packages/systems"],
 
     "@rpg/web": ["@rpg/web@workspace:apps/web"],
 

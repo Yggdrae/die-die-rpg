@@ -5,7 +5,8 @@
   "workspaces": [
     "apps/*",
     "packages/*",
-    "tools/*"
+    "tools/*",
+    "systems"
   ],
   "scripts": {
     "check": "biome check .",
@@ -16,6 +17,7 @@
     "typecheck": "bun run --filter '*' typecheck",
     "test": "bun test",
     "test:e2e": "playwright test",
+    "test:e2e:matrix": "playwright test -c playwright.matrix.config.ts",
     "build": "bun run --filter '*' build",
     "guard": "bun run --filter @rpg/guard guard"
   },
