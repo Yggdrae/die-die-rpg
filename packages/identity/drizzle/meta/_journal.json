@@ -22,6 +22,125 @@
       "when": 1788221574600,
       "tag": "0002_strong_mockingbird",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1792883925089,
+      "tag": "0003_least_privilege_sync_publication",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1792884345898,
+      "tag": "0004_audit_stores",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1792955774075,
+      "tag": "0005_sync_revocation_delivery",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1793063700049,
+      "tag": "0006_powersync_replication_role",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1793066634759,
+      "tag": "0007_audit_sync_publication",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1793113970105,
+      "tag": "0008_attachment_metadata",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1793131259929,
+      "tag": "0009_export_jobs",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1793209436429,
+      "tag": "0010_import_jobs",
+      "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1793226712381,
+      "tag": "0011_content_entities",
+      "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1793229473672,
+      "tag": "0012_content_relationships",
+      "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1793415322690,
+      "tag": "0013_offline_export_replica",
+      "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1793487811595,
+      "tag": "0014_dice_rolls",
+      "breakpoints": true
+    },
+    {
+      "idx": 15,
+      "version": "7",
+      "when": 1793578675547,
+      "tag": "0015_effect_applications",
+      "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "7",
+      "when": 1793742165863,
+      "tag": "0016_characters",
+      "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1793761979236,
+      "tag": "0017_sessions",
+      "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1793933485874,
+      "tag": "0018_encounters",
+      "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1793976452602,
+      "tag": "0019_rules_section_marks",
+      "breakpoints": true
     }
   ]
 }
