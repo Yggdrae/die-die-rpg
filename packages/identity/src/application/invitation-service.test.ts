@@ -1,9 +1,10 @@
-import { describe, expect, test } from 'bun:test';
+import { describe, expect, mock, test } from 'bun:test';
 import type { InvitationRecord, InvitationStore } from './invitation-service.ts';
 import { InvitationService } from './invitation-service.ts';
 
 const campaignId = '11111111-1111-1111-1111-111111111111';
 const userId = '22222222-2222-2222-2222-222222222222';
+const quietLog = { integrationDegraded: () => undefined };
 
 class FakeInvitationStore implements InvitationStore {
   record?: InvitationRecord;
@@ -56,7 +57,7 @@ class FakeInvitationStore implements InvitationStore {
 describe('InvitationService', () => {
   test('returns one raw token while persisting only its digest', async () => {
     const store = new FakeInvitationStore();
-    const service = new InvitationService(store);
+    const service = new InvitationService(store, { record: async () => undefined }, quietLog);
     const issued = await service.issue(userId, campaignId, { targetRole: 'player' });
     expect(issued.ok).toBe(true);
     if (!issued.ok) return;
@@ -67,7 +68,7 @@ describe('InvitationService', () => {
 
   test('preview exposes only approved public fields', async () => {
     const store = new FakeInvitationStore();
-    const service = new InvitationService(store);
+    const service = new InvitationService(store, { record: async () => undefined }, quietLog);
     const issued = await service.issue(userId, campaignId, { targetRole: 'player' });
     if (!issued.ok) throw new Error('fixture issue failed');
     const preview = await service.preview(issued.value.token);
@@ -84,7 +85,7 @@ describe('InvitationService', () => {
 
   test('rejects owner/observer and consumes a usable invitation once', async () => {
     const store = new FakeInvitationStore();
-    const service = new InvitationService(store);
+    const service = new InvitationService(store, { record: async () => undefined }, quietLog);
     expect(await service.issue(userId, campaignId, { targetRole: 'owner' })).toEqual({
       ok: false,
       error: 'invalid_role',
@@ -100,5 +101,65 @@ describe('InvitationService', () => {
       ok: false,
       error: 'unusable_invitation',
     });
+  });
+
+  test('accepted invitation records membership.created after commit', async () => {
+    const store = new FakeInvitationStore();
+    const events: unknown[] = [];
+    const service = new InvitationService(
+      store,
+      { record: async (event) => void events.push({ ...event, used: store.record?.state }) },
+      quietLog,
+    );
+    const issued = await service.issue(userId, campaignId, { targetRole: 'player' });
+    if (!issued.ok) throw new Error('fixture issue failed');
+    expect(events).toEqual([]);
+    expect((await service.accept(userId, issued.value.token)).ok).toBe(true);
+    expect(events).toEqual([
+      expect.objectContaining({
+        campaignId,
+        actor: { userId, campaignId, role: 'player' },
+        action: 'membership.created',
+        targetType: 'campaign_membership',
+        targetId: userId,
+        after: { role: 'player', version: 1, removed: false },
+        private: false,
+        used: 'used',
+      }),
+    ]);
+    expect(JSON.stringify(events)).not.toContain(issued.value.token);
+  });
+
+  test('audit failure keeps the accepted membership and is observable for retry', async () => {
+    const store = new FakeInvitationStore();
+    const degraded: unknown[] = [];
+    const service = new InvitationService(
+      store,
+      {
+        record: async () => {
+          throw new Error('audit down');
+        },
+      },
+      { integrationDegraded: (...args) => void degraded.push(args) },
+    );
+    const issued = await service.issue(userId, campaignId, { targetRole: 'player' });
+    if (!issued.ok) throw new Error('fixture issue failed');
+    expect(await service.accept(userId, issued.value.token)).toMatchObject({
+      ok: true,
+      value: { role: 'player' },
+    });
+    expect(degraded).toEqual([
+      ['audit', campaignId, userId, { event: 'membership.created', membershipVersion: 1 }],
+    ]);
+    expect(store.record?.state).toBe('used');
+  });
+
+  test('rejected acceptance records nothing', async () => {
+    const store = new FakeInvitationStore();
+    const record = mock(async (_event: unknown) => undefined);
+    const service = new InvitationService(store, { record }, quietLog);
+    expect((await service.accept(userId, 'Z'.repeat(43))).ok).toBe(false);
+    expect((await service.accept(userId, 'short')).ok).toBe(false);
+    expect(record).not.toHaveBeenCalled();
   });
 });

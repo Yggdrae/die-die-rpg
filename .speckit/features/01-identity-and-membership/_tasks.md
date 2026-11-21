@@ -21,14 +21,14 @@ feature 03 and therefore is not implemented here (task 12 keeps tombstones indef
 | 03 | [PostgreSQL tooling and core identity migration](tasks/task_03.md) | 01, 02 | completed |
 | 04 | [Account creation, login, authentication, and logout](tasks/task_04.md) | 03 | completed |
 | 05 | [Operator-issued password recovery](tasks/task_05.md) | 03, 04 | completed |
-| 06 | [Membership persistence and actor resolution](tasks/task_06.md) | 03, feature 02 campaign table | pending |
-| 07 | [Atomic campaign ownership integration](tasks/task_07.md) | 06, feature 02 campaign persistence | pending |
-| 08 | [Invitation lifecycle and acceptance](tasks/task_08.md) | 04, 06 | pending |
-| 09 | [Membership listing and administration](tasks/task_09.md) | 06, 07 | pending |
+| 06 | [Membership persistence and actor resolution](tasks/task_06.md) | 03, feature 02 campaign table | completed |
+| 07 | [Atomic campaign ownership integration](tasks/task_07.md) | 06, feature 02 campaign persistence | completed |
+| 08 | [Invitation lifecycle and acceptance](tasks/task_08.md) | 04, 06 | completed |
+| 09 | [Membership listing and administration](tasks/task_09.md) | 06, 07 | completed |
 | 10 | [Fastify identity routes and request security](tasks/task_10.md) | 04, 05, 08, 09 | completed |
 | 11 | [Web account and invitation flows](tasks/task_11.md) | 10 | completed |
-| 12 | [Audit and sync revocation boundaries](tasks/task_12.md) | 09; feature 03 and 06 contracts | pending |
-| 13 | [Architecture guard and P0 acceptance suite](tasks/task_13.md) | 07, 10, 11, 12 | pending |
+| 12 | [Audit and sync revocation boundaries](tasks/task_12.md) | 09; feature 03 and 06 contracts | completed |
+| 13 | [Architecture guard and P0 acceptance suite](tasks/task_13.md) | 07, 10, 11, 12 | completed |
 
 ## Dependency flow
 

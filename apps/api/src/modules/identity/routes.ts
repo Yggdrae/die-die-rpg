@@ -23,6 +23,13 @@ import type { FastifyInstance, FastifyReply } from 'fastify';
 import { FixedWindowRateLimit, requireSameOrigin } from '../security.ts';
 import { clearSessionCookie, requireAuthenticatedUser, sessionCookie } from './authenticate.ts';
 
+const PageQuery = Type.Object(
+  {
+    cursor: Type.Optional(Type.String({ minLength: 1, maxLength: 512 })),
+    limit: Type.Optional(Type.Integer({ minimum: 1, maximum: 100 })),
+  },
+  { additionalProperties: false },
+);
 const CampaignParams = inline(Type.Object({ campaignId: Id }, { additionalProperties: false }));
 const MemberParams = inline(
   Type.Object({ campaignId: Id, userId: Id }, { additionalProperties: false }),
@@ -168,7 +175,10 @@ export function registerIdentityRoutes(
     '/invitations/:token/accept',
     {
       preHandler: [requireAuthenticatedUser, sameOrigin, rateLimit.preHandler('invitation-accept')],
-      schema: { params: TokenParams, response: { 200: inline(MembershipView), 404: ApiError } },
+      schema: {
+        params: TokenParams,
+        response: { 200: inline(MembershipView), 404: ApiError, 409: ApiError },
+      },
     },
     async (request, reply) => {
       const user = request.authenticatedUser;
@@ -226,7 +236,11 @@ export function registerIdentityRoutes(
     '/campaigns/:campaignId/members',
     {
       preHandler: requireAuthenticatedUser,
-      schema: { params: CampaignParams, response: { 200: inline(MembershipPage), 404: ApiError } },
+      schema: {
+        params: CampaignParams,
+        querystring: PageQuery,
+        response: { 200: inline(MembershipPage), 404: ApiError },
+      },
     },
     async (request, reply) => {
       const user = request.authenticatedUser;
@@ -234,7 +248,7 @@ export function registerIdentityRoutes(
       const result = await services.memberships.listCampaign(
         user.userId,
         request.params.campaignId,
-        {},
+        request.query,
       );
       return result.ok
         ? reply.status(200).send(result.value)
@@ -244,11 +258,16 @@ export function registerIdentityRoutes(
 
   app.get(
     '/users/me/campaigns',
-    { preHandler: requireAuthenticatedUser, schema: { response: { 200: inline(MembershipPage) } } },
+    {
+      preHandler: requireAuthenticatedUser,
+      schema: { querystring: PageQuery, response: { 200: inline(MembershipPage) } },
+    },
     async (request, reply) => {
       const user = request.authenticatedUser;
       if (user === undefined) return;
-      return reply.status(200).send(await services.memberships.listUser(user.userId, {}));
+      return reply
+        .status(200)
+        .send(await services.memberships.listUser(user.userId, request.query));
     },
   );
 

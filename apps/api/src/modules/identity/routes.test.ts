@@ -43,13 +43,16 @@ function services(): IdentityRouteServices {
   } as unknown as IdentityRouteServices;
 }
 
-function harness(rateLimit = new FixedWindowRateLimit(10, 60_000)) {
+function harness(
+  rateLimit = new FixedWindowRateLimit(10, 60_000),
+  routeServices: IdentityRouteServices = services(),
+) {
   const app = buildApp();
   registerIdentityAuthentication(app, {
     authenticate: async (candidate) =>
       candidate === credential ? { userId, sessionId } : undefined,
   });
-  registerIdentityRoutes(app, services(), {
+  registerIdentityRoutes(app, routeServices, {
     allowedOrigin: origin,
     secureCookies: true,
     rateLimit,
@@ -109,6 +112,52 @@ describe('Fastify identity routes', () => {
     expect(first.statusCode).toBe(401);
     expect(second.statusCode).toBe(429);
     expect(first.body).not.toContain('Table_GM');
+    await app.close();
+  });
+
+  test('member lists pass the page cursor and limit through and reject bad paging', async () => {
+    const pages: unknown[] = [];
+    const routeServices = services();
+    const memberships = routeServices.memberships as unknown as Record<string, unknown>;
+    memberships.listCampaign = async (_user: string, _campaign: string, input: unknown) => {
+      pages.push(input);
+      return { ok: true, value: { items: [], nextCursor: 'next-page' } };
+    };
+    memberships.listUser = async (_user: string, input: unknown) => {
+      pages.push(input);
+      return { items: [] };
+    };
+    const app = harness(undefined, routeServices);
+    const cookie = `rpg_session=${credential}`;
+    const campaignId = '33333333-3333-3333-3333-333333333333';
+    const first = await app.inject({
+      method: 'GET',
+      url: `/campaigns/${campaignId}/members`,
+      headers: { cookie },
+    });
+    expect(JSON.parse(first.body)).toEqual({ items: [], nextCursor: 'next-page' });
+    const next = await app.inject({
+      method: 'GET',
+      url: `/campaigns/${campaignId}/members?cursor=next-page&limit=20`,
+      headers: { cookie },
+    });
+    expect(next.statusCode).toBe(200);
+    const mine = await app.inject({
+      method: 'GET',
+      url: '/users/me/campaigns?cursor=abc',
+      headers: { cookie },
+    });
+    expect(mine.statusCode).toBe(200);
+    expect(pages).toEqual([{}, { cursor: 'next-page', limit: 20 }, { cursor: 'abc' }]);
+    for (const query of ['limit=0', 'limit=101', 'cursor=', 'role=owner']) {
+      const bad = await app.inject({
+        method: 'GET',
+        url: `/campaigns/${campaignId}/members?${query}`,
+        headers: { cookie },
+      });
+      expect(bad.statusCode).toBe(400);
+    }
+    expect(pages).toHaveLength(3);
     await app.close();
   });
 });

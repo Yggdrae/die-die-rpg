@@ -1,5 +1,7 @@
 # Task 06: Membership Persistence and Actor Resolution
 
+Status: completed.
+
 ## Goal
 
 Persist campaign membership and make `ActorResolver` the sole authoritative role lookup.
@@ -27,11 +29,11 @@ Persist campaign membership and make `ActorResolver` the sole authoritative role
 
 ## Acceptance Criteria
 
-- [ ] Active membership resolves one `ActorRef`; absent or removed membership returns
+- [x] Active membership resolves one `ActorRef`; absent or removed membership returns
   `membership_not_found`.
-- [ ] Client-supplied roles cannot affect resolution.
-- [ ] `observer` cannot be persisted and owner uniqueness is enforced at least as "at most one."
-- [ ] Removed rows remain tombstones and are excluded from current lists.
+- [x] Client-supplied roles cannot affect resolution.
+- [x] `observer` cannot be persisted and owner uniqueness is enforced at least as "at most one."
+- [x] Removed rows remain tombstones and are excluded from current lists.
 
 ## Verification
 

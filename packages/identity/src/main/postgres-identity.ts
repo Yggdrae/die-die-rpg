@@ -57,6 +57,8 @@ export function createPostgresIdentityRuntime(input: {
     ),
     invitations: new InvitationService(
       new PostgresInvitationRepository(connection.db, input.campaignNames),
+      input.audit,
+      input.membershipLog,
     ),
     memberships,
     membershipWriter: new PostgresCampaignMembershipWriter(),

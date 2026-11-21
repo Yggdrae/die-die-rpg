@@ -7,8 +7,10 @@ export { AccountSessionService } from './application/account-session-service.ts'
 export * from './application/invitation-service.ts';
 export * from './application/membership-service.ts';
 export * from './application/recovery-service.ts';
+export * from './audit-declarations.ts';
 export * from './contracts/interfaces.ts';
 export * from './contracts/schemas.ts';
+export * from './domain/membership-cache.ts';
 export * from './domain/password.ts';
 export * from './domain/roles.ts';
 export * from './domain/token-lifecycle.ts';

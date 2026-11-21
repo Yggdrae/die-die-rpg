@@ -1,5 +1,7 @@
 # Task 08: Invitation Lifecycle and Acceptance
 
+Status: completed.
+
 ## Goal
 
 Implement revocable, expiring, single-use invitations that create exactly one scoped membership.
@@ -26,11 +28,11 @@ Implement revocable, expiring, single-use invitations that create exactly one sc
 
 ## Acceptance Criteria
 
-- [ ] Only authorized roles issue/revoke invitations under the frozen revocation policy.
-- [ ] Raw invitation token is returned once and never stored or logged.
-- [ ] Exactly one concurrent acceptance creates/reactivates membership and consumes the token.
-- [ ] Preview exposes only the approved public fields.
-- [ ] Acceptance grants exactly the invitation role in exactly one campaign.
+- [x] Only authorized roles issue/revoke invitations under the frozen revocation policy.
+- [x] Raw invitation token is returned once and never stored or logged.
+- [x] Exactly one concurrent acceptance creates/reactivates membership and consumes the token.
+- [x] Preview exposes only the approved public fields.
+- [x] Acceptance grants exactly the invitation role in exactly one campaign.
 
 ## Verification
 

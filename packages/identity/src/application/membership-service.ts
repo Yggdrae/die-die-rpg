@@ -8,7 +8,7 @@ import {
   type Role,
 } from '@rpg/contracts';
 import type { ActorResolver } from '../contracts/interfaces.ts';
-import type { MembershipPage, MembershipView } from '../contracts/schemas.ts';
+import type { MembershipCacheRow, MembershipPage, MembershipView } from '../contracts/schemas.ts';
 import {
   decideOwnershipTransfer,
   decideRemoval,
@@ -35,8 +35,26 @@ export type MembershipMutationError =
   | 'owner_conflict'
   | 'identity_unavailable';
 
+/**
+ * Minimal public fact about a membership row, current or removed. Authorizing history reads
+ * (feature 06 audit of membership events) needs only existence and version: never a role
+ * (`ActorResolver` stays the only role read) and never a username.
+ */
+export interface MembershipHistoryFact {
+  readonly campaignId: string;
+  readonly userId: string;
+  readonly version: number;
+  readonly removed: boolean;
+}
+
 export interface MembershipStore {
   find(campaignId: string, userId: string): Promise<MembershipRecord | undefined>;
+  /** `find` on a caller's open transaction, keeping the row from changing until it ends. */
+  findWithin(
+    transaction: unknown,
+    campaignId: string,
+    userId: string,
+  ): Promise<MembershipRecord | undefined>;
   listCampaign(
     campaignId: string,
     limit: number,
@@ -66,12 +84,28 @@ export interface MembershipStore {
   >;
 }
 
+/**
+ * Post-commit integration failure. `detail` is the safe replay key (event name and committed
+ * membership version) so the owning integration can retry; it never carries credentials.
+ */
 export interface MembershipLog {
   integrationDegraded(
     integration: 'audit' | 'revocation',
     campaignId: string,
     userId: string,
+    detail: { readonly event: string; readonly membershipVersion: number },
   ): void;
+}
+
+function actorOf(
+  membership: MembershipRecord | undefined,
+  userId: string,
+  campaignId: string,
+): Result<ActorRef, 'membership_not_found'> {
+  if (membership === undefined || membership.removedAt !== null || !isMvpRole(membership.role)) {
+    return err('membership_not_found');
+  }
+  return ok({ userId, campaignId, role: membership.role });
 }
 
 export class MembershipService implements ActorResolver {
@@ -86,11 +120,39 @@ export class MembershipService implements ActorResolver {
     userId: string,
     campaignId: string,
   ): Promise<Result<ActorRef, 'membership_not_found'>> {
+    return actorOf(await this.store.find(campaignId, userId), userId, campaignId);
+  }
+
+  /** `resolve` on a caller's open write transaction; see `MembershipStore.findWithin`. */
+  async resolveWithin(
+    transaction: unknown,
+    userId: string,
+    campaignId: string,
+  ): Promise<Result<ActorRef, 'membership_not_found'>> {
+    return actorOf(
+      await this.store.findWithin(transaction, campaignId, userId),
+      userId,
+      campaignId,
+    );
+  }
+
+  /**
+   * Whether `userId` has (or had) a membership in `campaignId`. Removed memberships still
+   * resolve, so their audit history stays addressable; a user who never belonged does not.
+   */
+  async historyFact(
+    campaignId: string,
+    userId: string,
+  ): Promise<MembershipHistoryFact | undefined> {
     const membership = await this.store.find(campaignId, userId);
-    if (membership === undefined || membership.removedAt !== null || !isMvpRole(membership.role)) {
-      return err('membership_not_found');
-    }
-    return ok({ userId, campaignId, role: membership.role });
+    return membership === undefined
+      ? undefined
+      : {
+          campaignId: membership.campaignId,
+          userId: membership.userId,
+          version: membership.version,
+          removed: membership.removedAt !== null,
+        };
   }
 
   async listCampaign(
@@ -100,6 +162,7 @@ export class MembershipService implements ActorResolver {
   ): Promise<Result<MembershipPage, 'not_found_or_forbidden'>> {
     if (!(await this.resolve(actorUserId, campaignId)).ok) return err('not_found_or_forbidden');
     const limit = input.limit ?? 50;
+    if (!validCursor(input.cursor)) return ok({ items: [] });
     const rows = await this.store.listCampaign(campaignId, limit + 1, input.cursor);
     return ok(page(rows, limit));
   }
@@ -109,6 +172,7 @@ export class MembershipService implements ActorResolver {
     input: { readonly limit?: number; readonly cursor?: string },
   ): Promise<MembershipPage> {
     const limit = input.limit ?? 50;
+    if (!validCursor(input.cursor)) return { items: [] };
     return page(await this.store.listUser(userId, limit + 1, input.cursor), limit);
   }
 
@@ -217,7 +281,10 @@ export class MembershipService implements ActorResolver {
         private: false,
       });
     } catch {
-      this.log.integrationDegraded('audit', actor.campaignId, target.userId);
+      this.log.integrationDegraded('audit', actor.campaignId, target.userId, {
+        event: action,
+        membershipVersion: target.version,
+      });
     }
     try {
       await this.revocations.publish({
@@ -228,7 +295,10 @@ export class MembershipService implements ActorResolver {
         committedAt: new Date().toISOString(),
       });
     } catch {
-      this.log.integrationDegraded('revocation', actor.campaignId, target.userId);
+      this.log.integrationDegraded('revocation', actor.campaignId, target.userId, {
+        event: reason,
+        membershipVersion: target.version,
+      });
     }
   }
 }
@@ -248,6 +318,28 @@ function toView(record: MembershipRecord): MembershipView {
     version: record.version,
     updatedAt: record.updatedAt.toISOString(),
   };
+}
+
+/** Maps an authoritative row, tombstones included, to the approved client cache shape. */
+export function toMembershipCacheRow(record: MembershipRecord): MembershipCacheRow {
+  if (!isMvpRole(record.role)) throw new Error('invalid persisted membership role');
+  return {
+    campaignId: record.campaignId,
+    userId: record.userId,
+    role: record.role,
+    version: record.version,
+    updatedAt: record.updatedAt.toISOString(),
+    removedAt: record.removedAt === null ? null : record.removedAt.toISOString(),
+  };
+}
+
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/** Cursors are client-supplied; a malformed one yields an empty page, never a database error. */
+function validCursor(cursor: string | undefined): boolean {
+  if (cursor === undefined) return true;
+  const parts = cursor.split(':');
+  return parts.length === 2 && parts.every((part) => UUID.test(part));
 }
 
 function page(rows: readonly MembershipRecord[], limit: number): MembershipPage {

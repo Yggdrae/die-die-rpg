@@ -71,3 +71,9 @@ export function redactIdentityDiagnostic(value: unknown): unknown {
     ]),
   );
 }
+
+/** Serialization failure or deadlock: safe to retry the whole transaction. */
+export function isTransientTransactionFailure(error: unknown): boolean {
+  const code = findPostgreSqlError(error).code;
+  return code === '40001' || code === '40P01';
+}

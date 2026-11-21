@@ -1,5 +1,7 @@
 # Task 07: Atomic Campaign Ownership Integration
 
+Status: completed.
+
 ## Goal
 
 Guarantee every committed campaign has exactly one active owner from creation through transfer.
@@ -26,10 +28,10 @@ Guarantee every committed campaign has exactly one active owner from creation th
 
 ## Acceptance Criteria
 
-- [ ] Campaign creation and initial owner membership commit or roll back together.
-- [ ] Database enforcement rejects zero or multiple active owners at commit.
-- [ ] Transfer never exposes an invalid committed owner count under concurrent requests.
-- [ ] Only the current owner can transfer to a current member.
+- [x] Campaign creation and initial owner membership commit or roll back together.
+- [x] Database enforcement rejects zero or multiple active owners at commit.
+- [x] Transfer never exposes an invalid committed owner count under concurrent requests.
+- [x] Only the current owner can transfer to a current member.
 
 ## Verification
 

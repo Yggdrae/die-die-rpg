@@ -61,6 +61,8 @@ describe.skipIf(connection === undefined)('PostgreSQL membership and invitation 
       new PostgresInvitationRepository(connection.db, {
         getDisplayName: async () => 'Invite Game',
       }),
+      { record: async () => undefined },
+      { integrationDegraded: () => undefined },
     );
     const issued = await invitations.issue(ownerId, campaignId, { targetRole: 'player' });
     expect(issued.ok).toBe(true);

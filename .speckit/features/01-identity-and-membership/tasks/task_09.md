@@ -1,5 +1,7 @@
 # Task 09: Membership Listing and Administration
 
+Status: completed.
+
 ## Goal
 
 Implement server-authoritative member listing, campaign listing, removal, role change, and
@@ -27,11 +29,11 @@ ownership-transfer application use cases.
 
 ## Acceptance Criteria
 
-- [ ] Owner/GM removal permissions and GM self-removal match the frozen behavior.
-- [ ] Sole owner cannot be removed; non-owner cannot change roles or transfer ownership.
-- [ ] Role/removal changes increment version and affect fresh resolution immediately.
-- [ ] Removed authored content remains.
-- [ ] Lists return each current membership once and exclude tombstones.
+- [x] Owner/GM removal permissions and GM self-removal match the frozen behavior.
+- [x] Sole owner cannot be removed; non-owner cannot change roles or transfer ownership.
+- [x] Role/removal changes increment version and affect fresh resolution immediately.
+- [x] Removed authored content remains.
+- [x] Lists return each current membership once and exclude tombstones.
 
 ## Verification
 

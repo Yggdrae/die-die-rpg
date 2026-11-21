@@ -1,4 +1,4 @@
-import { err, ok, type Result, type Role } from '@rpg/contracts';
+import { type AuditRecorder, err, ok, type Result, type Role } from '@rpg/contracts';
 import type {
   InvitationIssuedView,
   InvitationPreview,
@@ -7,6 +7,7 @@ import type {
 } from '../contracts/schemas.ts';
 import { isInvitationRole } from '../domain/roles.ts';
 import { digestOpaqueCredential, generateOpaqueCredential } from '../infra/credentials.ts';
+import type { MembershipLog } from './membership-service.ts';
 
 export type InvitationError =
   | 'invalid_role'
@@ -51,7 +52,11 @@ export interface InvitationStore {
 }
 
 export class InvitationService {
-  constructor(private readonly store: InvitationStore) {}
+  constructor(
+    private readonly store: InvitationStore,
+    private readonly audit: AuditRecorder,
+    private readonly log: MembershipLog,
+  ) {}
 
   async issue(
     actorUserId: string,
@@ -91,7 +96,35 @@ export class InvitationService {
 
   async accept(userId: string, token: string): Promise<Result<MembershipView, InvitationError>> {
     if (!isOpaque(token)) return err('unusable_invitation');
-    return this.store.accept({ tokenDigest: await digestOpaqueCredential(token), userId });
+    const accepted = await this.store.accept({
+      tokenDigest: await digestOpaqueCredential(token),
+      userId,
+    });
+    if (accepted.ok) await this.recordCreated(accepted.value);
+    return accepted;
+  }
+
+  /** Post-commit and non-blocking: a failed audit never undoes the accepted membership. */
+  private async recordCreated(membership: MembershipView): Promise<void> {
+    const { campaignId, role, version } = membership;
+    const userId = membership.user.id;
+    try {
+      await this.audit.record({
+        campaignId,
+        actor: { userId, campaignId, role },
+        action: 'membership.created',
+        targetType: 'campaign_membership',
+        targetId: userId,
+        after: { role, version, removed: false },
+        at: new Date().toISOString(),
+        private: false,
+      });
+    } catch {
+      this.log.integrationDegraded('audit', campaignId, userId, {
+        event: 'membership.created',
+        membershipVersion: version,
+      });
+    }
   }
 
   revoke(actorUserId: string, campaignId: string, invitationId: string) {

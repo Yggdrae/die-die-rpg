@@ -55,7 +55,7 @@ these are earliest deletion times, not guarantees of immediate deletion.
 | Recovery token | Feature 01, PostgreSQL | Recovery service and trusted-host adapter | Trusted-host issuance; recovery consumption | Never synchronized |
 | Invitation | Feature 01, PostgreSQL | Authorized campaign members; safe public preview | `owner`/`gm`; acceptance service | Never synchronized |
 | Campaign membership | Feature 01, PostgreSQL | Only published identity APIs and sync authorization | Campaign creation, invitation acceptance, membership administration | Current user's active row is a read cache |
-| Membership/recovery audit | Feature 06 | Feature 06 policy | Feature 01 through `AuditRecorder` | Defined by feature 06 |
+| Membership/recovery audit | Feature 06 | Feature 06 policy; membership events: owner/gm/assistant_gm via the server-only `campaign_membership` class (Approved (2026-10-28, delegated by owner)), history kept after removal; reads membership facts through `MembershipService.historyFact` only | Feature 01 through `AuditRecorder` | Defined by feature 06 |
 
 Other features must not query these tables. Feature 02 receives the narrow owner-creation writer;
 all role reads use `ActorResolver`.

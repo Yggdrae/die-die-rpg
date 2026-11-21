@@ -1,12 +1,7 @@
 import type { CampaignView } from '@rpg/campaigns';
-import type {
-  InvitationIssuedView,
-  InvitationView,
-  MembershipPage,
-  MembershipView,
-} from '@rpg/identity';
+import type { InvitationIssuedView, InvitationView, MembershipView } from '@rpg/identity';
 import { type FormEvent, useCallback, useEffect, useState } from 'react';
-import { apiRequest } from '../../api.ts';
+import { apiRequest, apiRequestAllPages } from '../../api.ts';
 
 export function CampaignAdmin(props: {
   readonly campaign: CampaignView;
@@ -21,11 +16,11 @@ export function CampaignAdmin(props: {
   const [error, setError] = useState<string>();
 
   const refresh = useCallback(async () => {
-    const [memberPage, invitationList] = await Promise.all([
-      apiRequest<MembershipPage>(`/campaigns/${campaignId}/members`),
+    const [memberList, invitationList] = await Promise.all([
+      apiRequestAllPages<MembershipView>(`/campaigns/${campaignId}/members`),
       apiRequest<InvitationView[]>(`/campaigns/${campaignId}/invitations`).catch(() => []),
     ]);
-    setMembers(memberPage.items);
+    setMembers(memberList);
     setInvitations(invitationList);
   }, [campaignId]);
 

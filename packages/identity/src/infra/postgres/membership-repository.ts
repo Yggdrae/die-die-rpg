@@ -23,6 +23,7 @@ import {
 } from '../../domain/roles.ts';
 import type { IdentityDatabase, IdentityTransaction } from './database.ts';
 import { inIdentityTransaction } from './database.ts';
+import { isTransientTransactionFailure } from './errors.ts';
 import { identityCampaignMemberships, identityInvitations, identityUsers } from './schema.ts';
 
 export interface CampaignDisplayNameReader {
@@ -60,6 +61,27 @@ export class PostgresMembershipRepository implements MembershipStore {
 
   async find(campaignId: string, userId: string) {
     return findMembership(this.db, campaignId, userId);
+  }
+
+  /**
+   * `FOR SHARE` on another feature's write transaction (same database): removals and role changes
+   * wait for it, concurrent writers of the same member do not. Those changes lock membership rows
+   * only, so taking this lock after the caller's own rows adds no deadlock cycle.
+   */
+  async findWithin(transaction: unknown, campaignId: string, userId: string) {
+    const [row] = await (transaction as Pick<IdentityDatabase, 'select'>)
+      .select(membershipSelection)
+      .from(identityCampaignMemberships)
+      .innerJoin(identityUsers, eq(identityUsers.id, identityCampaignMemberships.userId))
+      .where(
+        and(
+          eq(identityCampaignMemberships.campaignId, campaignId),
+          eq(identityCampaignMemberships.userId, userId),
+        ),
+      )
+      .limit(1)
+      .for('share', { of: identityCampaignMemberships });
+    return row;
   }
 
   async listCampaign(campaignId: string, limit: number, cursor?: string) {
@@ -199,8 +221,33 @@ export class PostgresMembershipRepository implements MembershipStore {
       MembershipMutationError
     >
   > {
-    try {
-      return await inIdentityTransaction(this.db, async (transaction) => {
+    for (let attempt = 1; attempt <= TRANSFER_ATTEMPTS; attempt += 1) {
+      try {
+        return await this.transferOnce(input);
+      } catch (error) {
+        if (attempt < TRANSFER_ATTEMPTS && isTransientTransactionFailure(error)) continue;
+        break;
+      }
+    }
+    return err('owner_conflict');
+  }
+
+  private transferOnce(input: {
+    readonly campaignId: string;
+    readonly actorUserId: string;
+    readonly targetUserId: string;
+  }) {
+    return inIdentityTransaction(
+      this.db,
+      async (
+        transaction,
+      ): Promise<
+        Result<
+          { readonly owner: MembershipRecord; readonly formerOwner: MembershipRecord },
+          MembershipMutationError
+        >
+      > => {
+        // Lock every active membership in stable user-ID order before deciding.
         const rows = await transaction
           .select(membershipSelection)
           .from(identityCampaignMemberships)
@@ -212,7 +259,7 @@ export class PostgresMembershipRepository implements MembershipStore {
             ),
           )
           .orderBy(asc(identityCampaignMemberships.userId))
-          .for('update');
+          .for('update', { of: identityCampaignMemberships });
         const actor = rows.find((row) => row.userId === input.actorUserId);
         const target = rows.find((row) => row.userId === input.targetUserId);
         if (!activeMvp(actor)) return err('not_found_or_forbidden');
@@ -253,17 +300,18 @@ export class PostgresMembershipRepository implements MembershipStore {
             ),
           )
           .returning();
-        if (formerOwner === undefined || owner === undefined) return err('owner_conflict');
+        // Never commit a half-applied transfer.
+        if (formerOwner === undefined || owner === undefined) transaction.rollback();
         return ok({
           formerOwner: { ...actor, ...formerOwner, role: 'gm' as const },
           owner: { ...target, ...owner, role: 'owner' as const },
         });
-      });
-    } catch {
-      return err<'owner_conflict'>('owner_conflict');
-    }
+      },
+    );
   }
 }
+
+const TRANSFER_ATTEMPTS = 3;
 
 export class PostgresInvitationRepository implements InvitationStore {
   constructor(
@@ -344,18 +392,19 @@ export class PostgresInvitationRepository implements InvitationStore {
   async accept(input: { readonly tokenDigest: Uint8Array; readonly userId: string }) {
     try {
       return await inIdentityTransaction(this.db, async (transaction) => {
+        // Lock the token row; lifecycle and expiry are judged in database time only.
         const [invitation] = await transaction
-          .select()
+          .select({
+            id: identityInvitations.id,
+            campaignId: identityInvitations.campaignId,
+            targetRole: identityInvitations.targetRole,
+            usable: sql<boolean>`${identityInvitations.usedAt} IS NULL AND ${identityInvitations.revokedAt} IS NULL AND ${identityInvitations.expiresAt} > transaction_timestamp()`,
+          })
           .from(identityInvitations)
           .where(eq(identityInvitations.tokenDigest, input.tokenDigest))
           .limit(1)
           .for('update');
-        if (
-          invitation === undefined ||
-          invitation.usedAt !== null ||
-          invitation.revokedAt !== null ||
-          invitation.expiresAt.getTime() <= Date.now()
-        ) {
+        if (invitation === undefined || !invitation.usable) {
           return err<'unusable_invitation'>('unusable_invitation');
         }
         const existing = await findMembership(
@@ -372,11 +421,15 @@ export class PostgresInvitationRepository implements InvitationStore {
           return err<'unusable_invitation'>('unusable_invitation');
         }
         if (existing === undefined) {
-          await transaction.insert(identityCampaignMemberships).values({
-            campaignId: invitation.campaignId,
-            userId: input.userId,
-            role: targetRole,
-          });
+          // A concurrent join by the same user commits first: keep its role, consume nothing.
+          const inserted = await transaction
+            .insert(identityCampaignMemberships)
+            .values({ campaignId: invitation.campaignId, userId: input.userId, role: targetRole })
+            .onConflictDoNothing()
+            .returning({ userId: identityCampaignMemberships.userId });
+          if (inserted.length !== 1) {
+            return err<'membership_already_exists'>('membership_already_exists');
+          }
         } else {
           await transaction
             .update(identityCampaignMemberships)
@@ -512,7 +565,10 @@ async function findMembership(
       ),
     )
     .limit(1);
-  const rows = lock && 'rollback' in executor ? await query.for('update') : await query;
+  const rows =
+    lock && 'rollback' in executor
+      ? await query.for('update', { of: identityCampaignMemberships })
+      : await query;
   return rows[0];
 }
 
@@ -534,7 +590,7 @@ async function lockMemberships(
       ),
     )
     .orderBy(asc(identityCampaignMemberships.userId))
-    .for('update');
+    .for('update', { of: identityCampaignMemberships });
 }
 
 function activeMvp(record: MembershipRecord | undefined): record is MembershipRecord & {

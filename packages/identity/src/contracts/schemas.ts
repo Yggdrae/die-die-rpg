@@ -91,6 +91,24 @@ export const MembershipView = Type.Object(
 );
 export type MembershipView = Static<typeof MembershipView>;
 
+/**
+ * Current-user membership row a client may cache for offline actor resolution (`_db.md`).
+ * Exactly these fields: no username, credential, session, invitation, or recovery data.
+ * Feature 03 owns delivery and local storage; the cache grants no server authority.
+ */
+export const MembershipCacheRow = Type.Object(
+  {
+    campaignId: Id,
+    userId: Id,
+    role: MvpRole,
+    version: Version,
+    updatedAt: Timestamp,
+    removedAt: Type.Union([Timestamp, Type.Null()]),
+  },
+  { additionalProperties: false, $id: 'MembershipCacheRow' },
+);
+export type MembershipCacheRow = Static<typeof MembershipCacheRow>;
+
 export const InvitationCreateInput = Type.Object(
   {
     targetRole: AssignableRole,

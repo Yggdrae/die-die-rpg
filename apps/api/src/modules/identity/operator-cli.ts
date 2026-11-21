@@ -1,8 +1,6 @@
-import {
-  createPostgresRecoveryRuntime,
-  type IdentityRecoveryLog,
-  type RecoveryIssuanceAudit,
-} from '@rpg/identity';
+import { createPostgresAuditRuntime } from '@rpg/audit';
+import { createPostgresRecoveryRuntime, type IdentityRecoveryLog } from '@rpg/identity';
+import { auditDiagnosticsFor, recoveryIssuanceAuditFor } from '../audit/composition.ts';
 
 interface CommandOutput {
   stdout(line: string): void;
@@ -14,6 +12,7 @@ interface OperatorCommandOptions {
   readonly args: readonly string[];
   readonly output: CommandOutput;
   readonly createRuntime?: typeof createPostgresRecoveryRuntime;
+  readonly createAudit?: typeof createPostgresAuditRuntime;
 }
 
 export async function runOperatorRecoveryCommand(options: OperatorCommandOptions): Promise<number> {
@@ -35,16 +34,20 @@ export async function runOperatorRecoveryCommand(options: OperatorCommandOptions
     recoverySucceeded: () => undefined,
     recoveryFailed: () => undefined,
   };
-  const audit: RecoveryIssuanceAudit = {
-    recordIssued: async (event) => {
-      options.output.stderr(
-        `Audit recovery.issued token=${event.tokenId} user=${event.userId} at=${event.issuedAt.toISOString()}`,
-      );
-    },
-  };
+  const line = (level: string) => (detail: object, message: string) =>
+    options.output.stderr(`Audit ${level}: ${message} ${JSON.stringify(detail)}`);
+  const auditRuntime = (options.createAudit ?? createPostgresAuditRuntime)({
+    connectionString: options.databaseUrl,
+    diagnostics: auditDiagnosticsFor({
+      info: line('info'),
+      warn: line('warn'),
+      error: line('error'),
+    }),
+    maxConnections: 1,
+  });
   const runtime = (options.createRuntime ?? createPostgresRecoveryRuntime)({
     connectionString: options.databaseUrl,
-    audit,
+    audit: recoveryIssuanceAuditFor(auditRuntime.recorder),
     log,
   });
 
@@ -59,6 +62,7 @@ export async function runOperatorRecoveryCommand(options: OperatorCommandOptions
     return 0;
   } finally {
     await runtime.close();
+    await auditRuntime.close();
   }
 }
 
