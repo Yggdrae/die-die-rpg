@@ -10,7 +10,7 @@ Source: `_prd.md`, `_bdd.md`, `_domain.md`, `_db.md`, and `_techspec.md`. P0 onl
 | 04 | [Fastify enforcement and safe denial behavior](tasks/task_04.md) | 01–03, feature 01 resolver | completed |
 | 05 | [Sync predicate compiler and equivalence suite](tasks/task_05.md) | 02, feature 03 | completed (provider round trip verified 2026-10-26) |
 | 06 | [Reveal and un-reveal interface](tasks/task_06.md) | 03–04 | completed (provider round trip verified 2026-10-26; live per-row reveal awaits a content class) |
-| 07 | [Authorization guard and security acceptance](tasks/task_07.md) | 04–06 | completed (attachment store/export not built; provider round trip verified 2026-10-26) |
+| 07 | [Authorization guard and security acceptance](tasks/task_07.md) | 04–06 | completed (provider round trip verified 2026-10-26; attachment and export checks closed by features 05 and 07) |
 
 Party targeting stays fail-closed/P1 until a party resolver exists. Custom roles are P2.
 

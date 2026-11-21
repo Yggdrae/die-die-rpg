@@ -1,7 +1,7 @@
 # Task 07: Authorization guard and security acceptance
 
-Status: completed (attachment store and export unverified: not built; provider round trip verified
-2026-10-26, see task 05). Depends on tasks 04–06.
+Status: completed (provider round trip verified 2026-10-26, see task 05; the attachment and export
+gaps below were closed by features 05 and 07). Depends on tasks 04–06.
 
 ## Scope
 
@@ -43,9 +43,13 @@ Gates (with .env): `bun run check` clean (240 files), `bun run typecheck` 10/10,
 
 ## Gaps
 
-- No attachment store or export feature exists; only the delegation helper is tested.
+- When this task closed, no attachment store or export feature existed; only the delegation helper
+  was tested. Closed later: feature 05 task 07 (`apps/api/src/modules/attachments/security.test.ts`)
+  and feature 07 (`apps/api/src/campaign-export.integration.test.ts`, player denial in
+  `apps/web/e2e/portability.e2e.ts`).
 - PowerSync round trip verified 2026-10-26 (task 05 "Provider round trip"): engine truth table and
-  live `/sync/stream` per role; browser SQLite delivery through the web SDK is still unverified.
+  live `/sync/stream` per role. Browser SQLite delivery through the web SDK was verified later by
+  feature 03 task 07.
 - Telemetry is aggregated in memory and not yet exposed through a metrics endpoint.
 
 ## Follow-up fixes (2026-10-26)
