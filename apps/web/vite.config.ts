@@ -14,6 +14,8 @@ export default defineConfig({
     react(),
     VitePWA({
       registerType: 'autoUpdate',
+      includeAssets: ['sync-assets/**/*.js', 'icons/*.png'],
+      workbox: { maximumFileSizeToCacheInBytes: 4 * 1024 * 1024 },
       manifest: {
         name: 'RPG Companion',
         short_name: 'RPG',
@@ -22,11 +24,36 @@ export default defineConfig({
         background_color: '#101014',
         display: 'standalone',
         start_url: '/',
-        icons: [],
+        icons: [
+          { src: '/icons/icon-192.png', sizes: '192x192', type: 'image/png', purpose: 'any' },
+          { src: '/icons/icon-512.png', sizes: '512x512', type: 'image/png', purpose: 'any' },
+          {
+            src: '/icons/icon-512.png',
+            sizes: '512x512',
+            type: 'image/png',
+            purpose: 'maskable',
+          },
+        ],
       },
     }),
   ],
+  // Playwright harnesses load by dynamic import; pre-bundle their deps so a cold dev server does
+  // not re-optimize and reload pages mid-test.
+  optimizeDeps: { entries: ['index.html', 'src/**/*e2e-harness.{ts,tsx}'] },
+  // The PowerSync web client references its own worker modules; the app passes the pinned copied
+  // workers explicitly, but the bundler still has to emit ES (code-split) worker chunks.
+  worker: { format: 'es' },
   server: {
     port: Number(process.env.WEB_PORT ?? 5173),
+    headers: {
+      'Cross-Origin-Opener-Policy': 'same-origin',
+      'Cross-Origin-Embedder-Policy': 'require-corp',
+    },
+  },
+  preview: {
+    headers: {
+      'Cross-Origin-Opener-Policy': 'same-origin',
+      'Cross-Origin-Embedder-Policy': 'require-corp',
+    },
   },
 });

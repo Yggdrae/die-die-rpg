@@ -19,6 +19,7 @@ export * from './primitives.ts';
 export * from './registries.ts';
 export * from './repository.ts';
 export * from './result.ts';
+export * from './revocation.ts';
 export * from './semantic-op.ts';
 export * from './system.ts';
 export * from './validate.ts';

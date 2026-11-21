@@ -158,8 +158,11 @@ the working dataset: five locations, six NPCs, five items.
 ## Open Questions
 
 - Player-authored private notes are visible only to their author. GM roles cannot read them.
-- TODO: Whether custom fields (`PRD.md` s.30) are free-form key-value or schema-declared in MVP.
-- TODO: Whether creature statistics reuse feature 15 rendering, shared with the feature 15 open
-  question. Reuse creates the only Track C internal dependency in the plan.
-- TODO: Whether scenes belong to this feature or to feature 18, given `PRD.md` s.44 shows a
-  current scene in Session Mode.
+- Custom fields (`PRD.md` s.30): free-form label/value pairs in MVP. Decided 2026-10-28 (delegated
+  by owner), `_techspec.md` D-01.
+- Creature statistics: deferred with FR-101 (P1); the feature 15 reuse question is reopened when
+  FR-101 is scheduled. Decided 2026-10-28 (delegated by owner), `_techspec.md` D-03.
+- Scenes: owned by this feature as a generic entity type; feature 18 references the current scene
+  through the published API. Decided 2026-10-28 (delegated by owner), `_techspec.md` D-02.
+- Other product decisions (role matrix, relationship kinds, limits, rich-text format, export and
+  search of personal notes): `_techspec.md` "Decisions" D-04..D-18.

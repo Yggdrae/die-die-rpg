@@ -1,0 +1,490 @@
+{
+  "contractVersion": 1,
+  "manifest": {
+    "ref": { "systemId": "fate-core", "version": "1.0.0" },
+    "name": "Fate Core",
+    "shortDescription": "Narrative play: aspects that matter, skills on a ladder, Fate points, stress boxes, and consequences the table decides.",
+    "complexity": "medium",
+    "languages": ["en"],
+    "integration": {
+      "mechanicsSupported": true,
+      "characterSheetSupported": true,
+      "rulesTextIntegrated": false,
+      "compendiumIntegrated": false,
+      "externalDocumentation": "https://fate-srd.com/fate-core"
+    },
+    "license": {
+      "license": "CC BY 3.0",
+      "source": "https://fate-srd.com/official-licensing-fate",
+      "version": "3.0",
+      "attribution": "This work is based on Fate Core System and Fate Accelerated Edition, products of Evil Hat Productions, LLC, developed, authored, and edited by Leonard Balsera, Brian Engard, Jeremy Keller, Ryan Macklin, Mike Olson, Clark Valentine, Amanda Valentine, Fred Hicks, and Rob Donoghue, and licensed for our use under the Creative Commons Attribution 3.0 Unported license (http://creativecommons.org/licenses/by/3.0/). Fate(TM) is a trademark of Evil Hat Productions, LLC.",
+      "redistributionStatus": "allowed",
+      "translationStatus": "allowed",
+      "brandUsageStatus": "review-required",
+      "assets": {
+        "rulesText": "allowed",
+        "mechanics": "allowed",
+        "officialArtwork": "forbidden",
+        "officialLogo": "forbidden"
+      }
+    },
+    "rulesEntryPoint": "https://fate-srd.com/fate-core",
+    "compatibleModules": []
+  },
+  "capabilities": [
+    "character_sheet",
+    "dice_rolls",
+    "resource_pools",
+    "resource_tracks",
+    "spendable_points",
+    "rating_ladders",
+    "freeform_entries",
+    "outcome_choices"
+  ],
+  "characterSchema": {
+    "fields": [
+      { "key": "name", "label": "Name", "group": "identity", "type": "text", "maxLength": 80 },
+      {
+        "key": "aspects",
+        "label": "Aspects",
+        "group": "identity",
+        "type": "repeater",
+        "of": [
+          {
+            "key": "text",
+            "label": "Aspect",
+            "group": "identity",
+            "type": "text",
+            "maxLength": 200
+          }
+        ],
+        "entryTypes": [
+          { "id": "high_concept", "label": "High concept" },
+          { "id": "trouble", "label": "Trouble" },
+          { "id": "character", "label": "Character" },
+          { "id": "situation", "label": "Situation" },
+          { "id": "boost", "label": "Boost" }
+        ]
+      },
+      {
+        "key": "skills",
+        "label": "Skills",
+        "group": "skills",
+        "type": "repeater",
+        "of": [
+          { "key": "skill", "label": "Skill", "group": "skills", "type": "text", "maxLength": 80 },
+          {
+            "key": "rating",
+            "label": "Rating",
+            "group": "skills",
+            "type": "number",
+            "min": 0,
+            "max": 8,
+            "default": 0,
+            "ladder": "adjectives"
+          }
+        ]
+      },
+      {
+        "key": "stunts",
+        "label": "Stunts",
+        "group": "skills",
+        "type": "repeater",
+        "of": [{ "key": "text", "label": "Stunt", "group": "skills", "type": "rich_text" }]
+      },
+      {
+        "key": "refresh",
+        "label": "Refresh",
+        "group": "resources",
+        "type": "number",
+        "min": 1,
+        "default": 3
+      },
+      {
+        "key": "fate_points",
+        "label": "Fate points",
+        "group": "resources",
+        "type": "resource",
+        "resourceKey": "fate_points"
+      },
+      {
+        "key": "physical_stress",
+        "label": "Physical stress",
+        "group": "harm",
+        "type": "resource",
+        "resourceKey": "physical_stress"
+      },
+      {
+        "key": "mental_stress",
+        "label": "Mental stress",
+        "group": "harm",
+        "type": "resource",
+        "resourceKey": "mental_stress"
+      },
+      {
+        "key": "consequences",
+        "label": "Consequences",
+        "group": "harm",
+        "type": "repeater",
+        "of": [
+          { "key": "text", "label": "Aspect", "group": "harm", "type": "text", "maxLength": 200 }
+        ],
+        "slots": [
+          { "id": "mild", "label": "Mild", "severity": 2 },
+          { "id": "moderate", "label": "Moderate", "severity": 4 },
+          { "id": "severe", "label": "Severe", "severity": 6 }
+        ]
+      }
+    ],
+    "summaryFields": ["name", "fate_points", "physical_stress", "mental_stress"]
+  },
+  "resources": [
+    {
+      "key": "fate_points",
+      "label": "Fate points",
+      "shape": "pool",
+      "min": 0,
+      "max": 99,
+      "default": { "formula": "refresh" },
+      "temporary": false,
+      "visibility": "everyone",
+      "spendable": true,
+      "recovery": [
+        {
+          "trigger": "session_start",
+          "label": "Up to refresh",
+          "amount": { "formula": "refresh - fate_points" }
+        }
+      ]
+    },
+    {
+      "key": "physical_stress",
+      "label": "Physical stress",
+      "shape": "track",
+      "boxes": [
+        { "id": "one", "label": "1", "value": 1 },
+        { "id": "two", "label": "2", "value": 2 },
+        { "id": "three", "label": "3 (Physique +1 or more)", "value": 3 },
+        { "id": "four", "label": "4 (Physique +3 or more)", "value": 4 }
+      ],
+      "visibility": "everyone",
+      "spendable": false,
+      "recovery": [{ "trigger": "conflict_end", "label": "Clears after the conflict" }]
+    },
+    {
+      "key": "mental_stress",
+      "label": "Mental stress",
+      "shape": "track",
+      "boxes": [
+        { "id": "one", "label": "1", "value": 1 },
+        { "id": "two", "label": "2", "value": 2 },
+        { "id": "three", "label": "3 (Will +1 or more)", "value": 3 },
+        { "id": "four", "label": "4 (Will +3 or more)", "value": 4 }
+      ],
+      "visibility": "everyone",
+      "spendable": false,
+      "recovery": [{ "trigger": "conflict_end", "label": "Clears after the conflict" }]
+    }
+  ],
+  "actions": [
+    {
+      "key": "overcome",
+      "label": "Overcome",
+      "roll": { "dice": "4dF + skill" },
+      "inputs": ["skills"],
+      "picks": [
+        { "name": "skill", "label": "Skill", "fields": ["skills"], "entryField": "rating" }
+      ],
+      "prompts": [{ "name": "opposition", "label": "Opposition", "default": 0 }],
+      "derived": [{ "name": "margin", "value": { "formula": "roll - opposition" } }],
+      "outcomes": [
+        {
+          "id": "style",
+          "label": "Succeed with style: a boost",
+          "when": { "formula": "margin >= 3" },
+          "resolution": { "mode": "apply", "effects": [] }
+        },
+        {
+          "id": "success",
+          "label": "Succeed",
+          "when": { "formula": "margin >= 1" },
+          "resolution": { "mode": "apply", "effects": [] }
+        },
+        {
+          "id": "tie",
+          "label": "Tie: succeed at a minor cost",
+          "when": { "formula": "margin == 0" },
+          "resolution": { "mode": "apply", "effects": [] }
+        },
+        {
+          "id": "failure",
+          "label": "Fail, or succeed at a serious cost",
+          "resolution": { "mode": "apply", "effects": [] }
+        }
+      ]
+    },
+    {
+      "key": "create_advantage",
+      "label": "Create an advantage",
+      "roll": { "dice": "4dF + skill" },
+      "inputs": ["skills"],
+      "picks": [
+        { "name": "skill", "label": "Skill", "fields": ["skills"], "entryField": "rating" }
+      ],
+      "prompts": [{ "name": "opposition", "label": "Opposition", "default": 0 }],
+      "derived": [{ "name": "margin", "value": { "formula": "roll - opposition" } }],
+      "outcomes": [
+        {
+          "id": "style",
+          "label": "Succeed with style: two free invocations",
+          "when": { "formula": "margin >= 3" },
+          "resolution": { "mode": "apply", "effects": [] }
+        },
+        {
+          "id": "success",
+          "label": "Succeed: one free invocation",
+          "when": { "formula": "margin >= 1" },
+          "resolution": { "mode": "apply", "effects": [] }
+        },
+        {
+          "id": "tie",
+          "label": "Tie: a boost",
+          "when": { "formula": "margin == 0" },
+          "resolution": { "mode": "apply", "effects": [] }
+        },
+        {
+          "id": "failure",
+          "label": "Fail, or the opposition gets the invocation",
+          "resolution": { "mode": "apply", "effects": [] }
+        }
+      ]
+    },
+    {
+      "key": "attack",
+      "label": "Attack",
+      "roll": { "dice": "4dF + skill" },
+      "inputs": ["skills"],
+      "picks": [
+        { "name": "skill", "label": "Skill", "fields": ["skills"], "entryField": "rating" }
+      ],
+      "prompts": [{ "name": "opposition", "label": "Defense", "default": 0 }],
+      "derived": [{ "name": "margin", "value": { "formula": "roll - opposition" } }],
+      "outcomes": [
+        {
+          "id": "style",
+          "label": "Hit with style: the target absorbs the shifts",
+          "when": { "formula": "margin >= 3" },
+          "resolution": {
+            "mode": "choice",
+            "options": [
+              {
+                "id": "physical_stress",
+                "label": "Mark physical stress",
+                "effects": [{ "effect": "mark_box", "params": { "resource": "physical_stress" } }]
+              },
+              {
+                "id": "mental_stress",
+                "label": "Mark mental stress",
+                "effects": [{ "effect": "mark_box", "params": { "resource": "mental_stress" } }]
+              },
+              {
+                "id": "consequence",
+                "label": "Take a consequence",
+                "effects": [{ "effect": "fill_slot", "params": { "field": "consequences" } }]
+              },
+              { "id": "taken_out", "label": "Taken out", "effects": [] },
+              { "id": "concede", "label": "Concede", "effects": [] }
+            ]
+          }
+        },
+        {
+          "id": "success",
+          "label": "Hit: the target absorbs the shifts",
+          "when": { "formula": "margin >= 1" },
+          "resolution": {
+            "mode": "choice",
+            "options": [
+              {
+                "id": "physical_stress",
+                "label": "Mark physical stress",
+                "effects": [{ "effect": "mark_box", "params": { "resource": "physical_stress" } }]
+              },
+              {
+                "id": "mental_stress",
+                "label": "Mark mental stress",
+                "effects": [{ "effect": "mark_box", "params": { "resource": "mental_stress" } }]
+              },
+              {
+                "id": "consequence",
+                "label": "Take a consequence",
+                "effects": [{ "effect": "fill_slot", "params": { "field": "consequences" } }]
+              },
+              { "id": "taken_out", "label": "Taken out", "effects": [] },
+              { "id": "concede", "label": "Concede", "effects": [] }
+            ]
+          }
+        },
+        {
+          "id": "tie",
+          "label": "Tie: no harm, a boost",
+          "when": { "formula": "margin == 0" },
+          "resolution": { "mode": "apply", "effects": [] }
+        },
+        { "id": "failure", "label": "No harm", "resolution": { "mode": "apply", "effects": [] } }
+      ]
+    },
+    {
+      "key": "defend",
+      "label": "Defend",
+      "roll": { "dice": "4dF + skill" },
+      "inputs": ["skills"],
+      "picks": [
+        { "name": "skill", "label": "Skill", "fields": ["skills"], "entryField": "rating" }
+      ],
+      "prompts": [{ "name": "opposition", "label": "Attack", "default": 0 }],
+      "derived": [{ "name": "margin", "value": { "formula": "roll - opposition" } }],
+      "outcomes": [
+        {
+          "id": "style",
+          "label": "Defend with style: a boost",
+          "when": { "formula": "margin >= 3" },
+          "resolution": { "mode": "apply", "effects": [] }
+        },
+        {
+          "id": "success",
+          "label": "Defend",
+          "when": { "formula": "margin >= 1" },
+          "resolution": { "mode": "apply", "effects": [] }
+        },
+        {
+          "id": "tie",
+          "label": "Tie: the opponent gets a boost",
+          "when": { "formula": "margin == 0" },
+          "resolution": { "mode": "apply", "effects": [] }
+        },
+        {
+          "id": "failure",
+          "label": "Suffer what you were defending against",
+          "resolution": { "mode": "apply", "effects": [] }
+        }
+      ]
+    },
+    {
+      "key": "invoke_aspect",
+      "label": "Spend a Fate point",
+      "inputs": [],
+      "outcomes": [
+        {
+          "id": "spent",
+          "label": "Spend a Fate point",
+          "resolution": {
+            "mode": "apply",
+            "effects": [
+              { "effect": "spend_resource", "params": { "resource": "fate_points", "amount": 1 } }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "key": "gain_fate_point",
+      "label": "Gain a Fate point",
+      "inputs": [],
+      "outcomes": [
+        {
+          "id": "gained",
+          "label": "Gain a Fate point",
+          "resolution": {
+            "mode": "apply",
+            "effects": [
+              { "effect": "gain_resource", "params": { "resource": "fate_points", "amount": 1 } }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "key": "recover_consequence",
+      "label": "Clear a recovered consequence",
+      "inputs": [],
+      "outcomes": [
+        {
+          "id": "cleared",
+          "label": "Clear the consequence",
+          "resolution": {
+            "mode": "apply",
+            "effects": [{ "effect": "clear_slot", "params": { "field": "consequences" } }]
+          }
+        }
+      ]
+    }
+  ],
+  "mechanics": {
+    "conditions": [],
+    "ladders": [
+      {
+        "key": "adjectives",
+        "label": "The ladder",
+        "steps": [
+          { "value": -2, "label": "Terrible" },
+          { "value": -1, "label": "Poor" },
+          { "value": 0, "label": "Mediocre" },
+          { "value": 1, "label": "Average" },
+          { "value": 2, "label": "Fair" },
+          { "value": 3, "label": "Good" },
+          { "value": 4, "label": "Great" },
+          { "value": 5, "label": "Superb" },
+          { "value": 6, "label": "Fantastic" },
+          { "value": 7, "label": "Epic" },
+          { "value": 8, "label": "Legendary" }
+        ]
+      }
+    ]
+  },
+  "rules": {
+    "sections": [
+      {
+        "id": "basics",
+        "title": "The basics",
+        "category": "introduction",
+        "references": ["taking_action"]
+      },
+      {
+        "id": "aspects",
+        "title": "Aspects and Fate points",
+        "category": "core_mechanics",
+        "references": ["taking_action"]
+      },
+      {
+        "id": "skills",
+        "title": "Skills and stunts",
+        "category": "core_mechanics",
+        "references": ["taking_action"]
+      },
+      {
+        "id": "taking_action",
+        "title": "Taking action: dice and the ladder",
+        "category": "core_mechanics",
+        "references": ["four_actions"]
+      },
+      {
+        "id": "four_actions",
+        "title": "The four actions",
+        "category": "core_mechanics",
+        "references": ["resolving_attacks"]
+      },
+      {
+        "id": "resolving_attacks",
+        "title": "Resolving attacks: stress and consequences",
+        "category": "combat",
+        "references": ["four_actions"]
+      }
+    ]
+  },
+  "compendiums": [],
+  "options": [],
+  "gameModes": [
+    { "id": "gm-players", "label": "GM + Players" },
+    { "id": "theatre-of-the-mind", "label": "Theatre of the Mind" }
+  ]
+}

@@ -112,6 +112,17 @@ on an offline write is asynchronous, and `SyncedRepository` gained a `conflicts`
 result (`spike-findings.md`, Finding 1). That is the process working, and it is why the spike
 runs in wave 0 rather than wave 3.
 
+### Post-freeze contract change log
+
+Each row is a dated note in this directory; the review state is copied from the note itself.
+
+| Note | Surface | Review state |
+| --- | --- | --- |
+| `2026-08-30-revocation-purge-contract-change.md` | `revocation.ts` revocation publisher, purge evidence | Track A/B/C pending |
+| `2026-10-24-replica-watermark-contract-change.md` | `revocation.ts` replica purge, watermarks, tombstones | Track A/B/C pending |
+| `2026-10-27-transaction-aware-import-contract-change.md` | `registries.ts` `ImportableModule` and import context/result/warning | Ratified 2026-10-28 (A/B/C, repository owner delegation); applied additively |
+| `2026-10-30-capability-registry-contract-change.md` | `system.ts` closed `CAPABILITY_KEYS`, removal of the unchecked `capabilityKey` | Ratified 2026-10-30 (A/B/C, repository owner delegation) |
+
 ---
 
 ## Product decisions

@@ -1,0 +1,21 @@
+{
+  "name": "@rpg/authorization",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@rpg/audit": "workspace:*",
+    "@rpg/contracts": "workspace:*"
+  },
+  "devDependencies": {
+    "@rpg/config": "workspace:*",
+    "drizzle-orm": "^0.45.2",
+    "postgres": "^3.4.9"
+  }
+}

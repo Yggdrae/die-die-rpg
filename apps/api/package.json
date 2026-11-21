@@ -6,16 +6,36 @@
   "scripts": {
     "dev": "bun --watch src/main.ts",
     "start": "bun src/main.ts",
-    "build": "bun build src/main.ts --target=bun --outdir=dist",
+    "build": "bun build src/main.ts --target=bun --outdir=dist && bun ../../tools/guard/src/bundle-check.ts api dist",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "@fastify/type-provider-typebox": "^5.2.0",
+    "@rpg/actions": "workspace:*",
+    "@rpg/attachments": "workspace:*",
+    "@rpg/audit": "workspace:*",
+    "@rpg/authorization": "workspace:*",
+    "@rpg/campaign-portability": "workspace:*",
+    "@rpg/campaigns": "workspace:*",
+    "@rpg/characters": "workspace:*",
+    "@rpg/encounters": "workspace:*",
+    "@rpg/sessions": "workspace:*",
+    "@rpg/content": "workspace:*",
+    "@rpg/dice": "workspace:*",
     "@rpg/contracts": "workspace:*",
+    "@rpg/fixtures": "workspace:*",
+    "@rpg/formula": "workspace:*",
+    "@rpg/identity": "workspace:*",
+    "@rpg/rules": "workspace:*",
+    "@rpg/installed-systems": "workspace:*",
+    "@rpg/sync": "workspace:*",
+    "@rpg/systems": "workspace:*",
     "@sinclair/typebox": "^0.34.48",
     "fastify": "^5.7.1"
   },
   "devDependencies": {
-    "@rpg/config": "workspace:*"
+    "drizzle-orm": "^0.45.2",
+    "@rpg/config": "workspace:*",
+    "postgres": "^3.4.9"
   }
 }

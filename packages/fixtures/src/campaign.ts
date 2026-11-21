@@ -1,5 +1,8 @@
-import type { ActorRef, EntityEnvelope, SystemRef, Visibility } from '@rpg/contracts';
+import type { SystemDefinition } from '@rpg/campaigns';
+import type { ActorRef, EntityEnvelope, Visibility } from '@rpg/contracts';
+import { systemDefinitionOf } from '@rpg/systems';
 import { CAMPAIGN_ID, ITEMS, LOCATIONS, NPCS, USERS } from './ids.ts';
+import { FIXTURE_SYSTEM, FIXTURE_SYSTEM_PACKAGE } from './system-package.ts';
 
 /**
  * "The Missing Caravan" (`PRD.md` s.82).
@@ -15,17 +18,11 @@ import { CAMPAIGN_ID, ITEMS, LOCATIONS, NPCS, USERS } from './ids.ts';
 
 const NOW = '2026-08-27T09:00:00Z';
 
-/**
- * The fixture system is intentionally neither Cairn nor Fate.
- *
- * If Track C builds against a Cairn-shaped fixture, a hidden assumption about Cairn passes
- * every test until wave 3. Using a third shape is the cheapest available check on the
- * architectural criterion in `PRD.md` s.89.
- */
-export const FIXTURE_SYSTEM: SystemRef = {
-  systemId: 'fixture-system',
-  version: '0.1.0',
-};
+export { FIXTURE_SYSTEM } from './system-package.ts';
+
+/** The campaign-facing projection of the fixture package, derived rather than written twice. */
+export const FIXTURE_SYSTEM_DEFINITION: SystemDefinition =
+  systemDefinitionOf(FIXTURE_SYSTEM_PACKAGE);
 
 const GM_ONLY: Visibility = { mode: 'gm_only' };
 const EVERYONE: Visibility = { mode: 'everyone' };

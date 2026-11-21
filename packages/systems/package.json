@@ -1,0 +1,21 @@
+{
+  "name": "@rpg/systems",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./testing": "./src/testing/conformance.ts",
+    "./testing/paradigms": "./src/paradigms.test-support.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@rpg/contracts": "workspace:*",
+    "@sinclair/typebox": "^0.34.48"
+  },
+  "devDependencies": {
+    "@rpg/config": "workspace:*"
+  }
+}

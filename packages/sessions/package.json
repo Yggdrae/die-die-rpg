@@ -1,0 +1,24 @@
+{
+  "name": "@rpg/sessions",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./postgres": "./src/postgres.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@rpg/authorization": "workspace:*",
+    "@rpg/content": "workspace:*",
+    "@rpg/contracts": "workspace:*",
+    "@sinclair/typebox": "^0.34.48",
+    "drizzle-orm": "^0.45.2",
+    "postgres": "^3.4.9"
+  },
+  "devDependencies": {
+    "@rpg/config": "workspace:*"
+  }
+}

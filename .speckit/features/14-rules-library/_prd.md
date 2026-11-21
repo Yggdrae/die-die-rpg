@@ -153,7 +153,6 @@ None specific. The licence-gating approach belongs to feature 08 FR-003 and is a
 - MVP rules text may ship only from the official Cairn and Fate SRDs under their applicable
   Creative Commons terms, with required attribution and share-alike compliance. Book content
   outside those SRDs is excluded.
-- TODO: Search implementation for offline use, given the local database is SQLite/WASM
-  (`PRD.md` s.53) and full-text search capability there needs verification.
-- TODO: Whether player-permitted rules (`PRD.md` s.69) is a per-section visibility declaration in
-  the package or a whole-library permission.
+- Resolved (`_techspec.md` D-02, D-06): rules text ships in the application bundle; search is an in-memory
+  `@rpg/search` index on the device, so FTS5 is not needed.
+- Resolved (`_techspec.md` D-12): a whole-library permission; every member reads every section in P0.

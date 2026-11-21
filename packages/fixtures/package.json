@@ -10,7 +10,9 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@rpg/contracts": "workspace:*"
+    "@rpg/campaigns": "workspace:*",
+    "@rpg/contracts": "workspace:*",
+    "@rpg/systems": "workspace:*"
   },
   "devDependencies": {
     "@rpg/config": "workspace:*"

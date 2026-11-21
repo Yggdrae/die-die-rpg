@@ -1,0 +1,469 @@
+config:
+  edition: 3
+
+streams:
+  authorized_campaigns:
+    auto_subscribe: true
+    queries:
+      # Feature 04 task 05: compiled from the registered `campaign` Resource Policy
+      # (`apps/api/src/modules/sync/sync-rules.ts`). Do not edit by hand:
+      # `sync-config.integration.test.ts` fails when this query drifts from the compiled output.
+      - >-
+        SELECT campaigns.id, campaigns.name, campaigns.description, campaigns.game_mode,
+               campaigns.created_by, campaigns.version, campaigns.created_at, campaigns.updated_at,
+               campaigns.deleted_at
+        FROM campaigns
+        INNER JOIN identity_campaign_memberships m ON m.campaign_id = campaigns.id
+        WHERE m.user_id = auth.user_id() AND m.removed_at IS NULL
+          AND m.role IN '["owner","gm","assistant_gm","player"]'
+      # Feature 03 task 07: platform rows (not Resource Classes). Both carry the campaign class's
+      # reading-role scope; settings that are not member-visible follow `gm_only`. A hold names its
+      # record, so (feature 16 task 04, B-3) holds of a class replicate only to the roles that read
+      # every row of that class regardless of Visibility (`campaign`: every reader; `campaign_entity`:
+      # the GM roles), or, for a class with an Ownership Rule (`personal_note`), to the holder only.
+      # Per-row predicates only: no join to a content table (PowerSync 1.25.0 does not enforce
+      # joined-row equality). `sync-config.integration.test.ts` derives these filters from the
+      # registered declarations.
+      # PowerSync 1.25.0 dialect: no source-table alias (it renames the synced table), no
+      # `concat` (use `||`), value sets as JSON array literals (`IN '[...]'`, not `IN (...)`).
+      - >-
+        SELECT campaign_settings.campaign_id || ':' || campaign_settings.namespace AS id,
+               campaign_settings.campaign_id, campaign_settings.namespace, campaign_settings.value,
+               campaign_settings.member_visible, campaign_settings.version,
+               campaign_settings.updated_at, campaign_settings.updated_by,
+               campaign_settings.deleted_at
+        FROM campaign_settings
+        INNER JOIN identity_campaign_memberships m ON m.campaign_id = campaign_settings.campaign_id
+        WHERE m.user_id = auth.user_id() AND m.removed_at IS NULL
+          AND m.role IN '["owner","gm","assistant_gm","player"]'
+          AND (campaign_settings.member_visible OR m.role IN '["owner","gm","assistant_gm"]')
+      # Feature 07 task 05: the exact pins, readable by every reader of the campaign.
+      - >-
+        SELECT campaign_system_pins.campaign_id AS id, campaign_system_pins.campaign_id,
+               campaign_system_pins.system_id, campaign_system_pins.system_version
+        FROM campaign_system_pins
+        INNER JOIN identity_campaign_memberships m ON m.campaign_id = campaign_system_pins.campaign_id
+        WHERE m.user_id = auth.user_id() AND m.removed_at IS NULL
+          AND m.role IN '["owner","gm","assistant_gm","player"]'
+      - >-
+        SELECT campaign_module_pins.campaign_id || ':' || campaign_module_pins.module_id AS id,
+               campaign_module_pins.campaign_id, campaign_module_pins.module_id,
+               campaign_module_pins.module_version
+        FROM campaign_module_pins
+        INNER JOIN identity_campaign_memberships m ON m.campaign_id = campaign_module_pins.campaign_id
+        WHERE m.user_id = auth.user_id() AND m.removed_at IS NULL
+          AND m.role IN '["owner","gm","assistant_gm","player"]'
+      - >-
+        SELECT sync_long_text_holds.campaign_id || ':' || sync_long_text_holds.resource_class
+                 || ':' || sync_long_text_holds.record_id || ':' || sync_long_text_holds.field_path
+                 AS id,
+               sync_long_text_holds.campaign_id, sync_long_text_holds.resource_class,
+               sync_long_text_holds.record_id, sync_long_text_holds.field_path,
+               sync_long_text_holds.holder_user_id, sync_long_text_holds.acquired_at,
+               sync_long_text_holds.renewed_at, sync_long_text_holds.expires_at,
+               sync_long_text_holds.version
+        FROM sync_long_text_holds
+        INNER JOIN identity_campaign_memberships m ON m.campaign_id = sync_long_text_holds.campaign_id
+        WHERE m.user_id = auth.user_id() AND m.removed_at IS NULL
+          AND m.role IN '["owner","gm","assistant_gm","player"]'
+          AND (sync_long_text_holds.resource_class = 'campaign'
+            OR (sync_long_text_holds.resource_class = 'campaign_entity'
+              AND m.role IN '["owner","gm","assistant_gm"]')
+            OR (sync_long_text_holds.resource_class = 'personal_note'
+              AND sync_long_text_holds.holder_user_id = auth.user_id())
+            OR (sync_long_text_holds.resource_class = 'entity_relationship'
+              AND m.role IN '["owner","gm","assistant_gm"]')
+            OR (sync_long_text_holds.resource_class = 'character'
+              AND sync_long_text_holds.holder_user_id = auth.user_id())
+            OR (sync_long_text_holds.resource_class = 'campaign_session'
+              AND m.role IN '["owner","gm","assistant_gm"]')
+            OR (sync_long_text_holds.resource_class = 'session_gm_note'
+              AND m.role IN '["owner","gm","assistant_gm"]')
+            OR (sync_long_text_holds.resource_class = 'encounter'
+              AND m.role IN '["owner","gm","assistant_gm"]')
+            OR (sync_long_text_holds.resource_class = 'encounter_gm_note'
+              AND m.role IN '["owner","gm","assistant_gm"]')
+            OR (sync_long_text_holds.resource_class = 'encounter_participant'
+              AND m.role IN '["owner","gm","assistant_gm"]')
+            OR (sync_long_text_holds.resource_class = 'rules_section_mark'
+              AND sync_long_text_holds.holder_user_id = auth.user_id()))
+  # Feature 07 task 05: metadata an offline export needs and only its holders receive, the roles of
+  # the campaign `export` capability. Never `object_key`, never a preserved chunk's payload. Every
+  # owner class of an attachment is readable by these roles (feature 16 D-15: no attachments on
+  # personal notes), so no per-attachment Visibility applies here.
+  campaign_export_metadata:
+    auto_subscribe: true
+    queries:
+      - >-
+        SELECT attachments.id, attachments.campaign_id, attachments.owner_resource_class,
+               attachments.owner_resource_id, attachments.filename, attachments.mime_type,
+               attachments.declared_size, attachments.verified_size,
+               hex(attachments.declared_checksum) AS declared_checksum,
+               hex(attachments.verified_checksum) AS verified_checksum,
+               attachments.visibility_mode, attachments.visibility_targets, attachments.version,
+               attachments.created_at, attachments.finalized_at
+        FROM attachments
+        INNER JOIN identity_campaign_memberships m ON m.campaign_id = attachments.campaign_id
+        WHERE m.user_id = auth.user_id() AND m.removed_at IS NULL
+          AND m.role IN '["owner","gm"]'
+          AND attachments.status = 'ready' AND attachments.deleted_at IS NULL
+      - >-
+        SELECT import_preserved_chunks.campaign_id || ':' || import_preserved_chunks.module_id
+                 || ':' || import_preserved_chunks.chunk_version AS id,
+               import_preserved_chunks.campaign_id, import_preserved_chunks.module_id,
+               import_preserved_chunks.chunk_version
+        FROM import_preserved_chunks
+        INNER JOIN identity_campaign_memberships m ON m.campaign_id = import_preserved_chunks.campaign_id
+        WHERE m.user_id = auth.user_id() AND m.removed_at IS NULL
+          AND m.role IN '["owner","gm"]'
+  # Feature 16 tasks 04 and 08: campaign entities (every configured type), player personal notes,
+  # and entity relationships. Compiled from the registered `campaign_entity`, `personal_note`, and
+  # `entity_relationship` Resource Policies
+  # (`apps/api/src/modules/sync/sync-rules.ts`, `@rpg/content`). Do not edit by hand:
+  # `sync-config.integration.test.ts` fails when a query drifts from the compiled output. Each query
+  # is a per-row predicate on its own table plus the requester's own membership row. GM-only
+  # entities reach GM roles only; a personal note reaches its author only (no GM-role override). A
+  # relationship is filtered by its own Visibility only (no join to its endpoints): the write-time
+  # bound (D-07 option A) keeps it within both endpoints, so it never reaches a requester who cannot
+  # read either endpoint.
+  authorized_content:
+    auto_subscribe: true
+    queries:
+      - >-
+        SELECT content_entities.id, content_entities.campaign_id, content_entities.type,
+               content_entities.name, content_entities.summary, content_entities.description,
+               content_entities.tags, content_entities.fields, content_entities.metadata,
+               content_entities.visibility_mode, content_entities.visibility_targets,
+               content_entities.version, content_entities.created_at, content_entities.updated_at,
+               content_entities.created_by, content_entities.updated_by, content_entities.deleted_at
+        FROM content_entities
+        INNER JOIN identity_campaign_memberships m ON m.campaign_id = content_entities.campaign_id
+        WHERE m.user_id = auth.user_id() AND m.removed_at IS NULL
+          AND m.role IN '["owner","gm","assistant_gm","player"]'
+          AND (content_entities.visibility_mode = 'everyone'
+            OR (content_entities.visibility_mode = 'players'
+              AND auth.user_id() IN content_entities.visibility_targets)
+            OR (m.role IN '["owner","gm","assistant_gm"]'
+              AND content_entities.visibility_mode IN '["gm_only","players"]'))
+      - >-
+        SELECT content_personal_notes.id, content_personal_notes.campaign_id,
+               content_personal_notes.author_user_id, content_personal_notes.name,
+               content_personal_notes.body, content_personal_notes.tags,
+               content_personal_notes.metadata, content_personal_notes.visibility_mode,
+               content_personal_notes.visibility_targets, content_personal_notes.version,
+               content_personal_notes.created_at, content_personal_notes.updated_at,
+               content_personal_notes.created_by, content_personal_notes.updated_by,
+               content_personal_notes.deleted_at
+        FROM content_personal_notes
+        INNER JOIN identity_campaign_memberships m
+          ON m.campaign_id = content_personal_notes.campaign_id
+        WHERE m.user_id = auth.user_id() AND m.removed_at IS NULL
+          AND m.role = 'player'
+          AND content_personal_notes.author_user_id = auth.user_id()
+          AND (content_personal_notes.visibility_mode = 'everyone'
+            OR (content_personal_notes.visibility_mode = 'players'
+              AND auth.user_id() IN content_personal_notes.visibility_targets))
+      - >-
+        SELECT content_entity_relationships.id, content_entity_relationships.campaign_id,
+               content_entity_relationships.source_entity_id,
+               content_entity_relationships.target_entity_id, content_entity_relationships.kind,
+               content_entity_relationships.visibility_mode,
+               content_entity_relationships.visibility_targets, content_entity_relationships.version,
+               content_entity_relationships.created_at, content_entity_relationships.updated_at,
+               content_entity_relationships.created_by, content_entity_relationships.updated_by,
+               content_entity_relationships.deleted_at
+        FROM content_entity_relationships
+        INNER JOIN identity_campaign_memberships m
+          ON m.campaign_id = content_entity_relationships.campaign_id
+        WHERE m.user_id = auth.user_id() AND m.removed_at IS NULL
+          AND m.role IN '["owner","gm","assistant_gm","player"]'
+          AND (content_entity_relationships.visibility_mode = 'everyone'
+            OR (content_entity_relationships.visibility_mode = 'players'
+              AND auth.user_id() IN content_entity_relationships.visibility_targets)
+            OR (m.role IN '["owner","gm","assistant_gm"]'
+              AND content_entity_relationships.visibility_mode IN '["gm_only","players"]'))
+  # Feature 09: recorded rolls. Compiled from the registered `dice_roll` Resource Policy
+  # (`apps/api/src/modules/sync/sync-rules.ts`, `@rpg/dice`). Do not edit by hand:
+  # `sync-config.integration.test.ts` fails when this query drifts from the compiled output. GM-only
+  # and blind rolls are `gm_only` rows, outside this predicate for a player, so they never reach a
+  # player's replica: absent, not filtered at rendering.
+  authorized_rolls:
+    auto_subscribe: true
+    queries:
+      - >-
+        SELECT dice_rolls.id, dice_rolls.campaign_id, dice_rolls.actor_user_id, dice_rolls.actor_ref,
+               dice_rolls.target_ref, dice_rolls.action, dice_rolls.session_id, dice_rolls.expression,
+               dice_rolls.inputs, dice_rolls.result, dice_rolls.natural_result,
+               dice_rolls.modified_result, dice_rolls.roll_visibility, dice_rolls.visibility_mode,
+               dice_rolls.visibility_targets, dice_rolls.version, dice_rolls.rolled_at,
+               dice_rolls.created_at
+        FROM dice_rolls
+        INNER JOIN identity_campaign_memberships m ON m.campaign_id = dice_rolls.campaign_id
+        WHERE m.user_id = auth.user_id() AND m.removed_at IS NULL
+          AND m.role IN '["owner","gm","assistant_gm","player"]'
+          AND (dice_rolls.visibility_mode = 'everyone'
+            OR (dice_rolls.visibility_mode = 'players'
+              AND auth.user_id() IN dice_rolls.visibility_targets)
+            OR (m.role IN '["owner","gm","assistant_gm"]'
+              AND dice_rolls.visibility_mode IN '["gm_only","players"]'))
+  # Feature 11: effect applications. Compiled from the registered `effect_application` Resource Policy
+  # (`apps/api/src/modules/sync/sync-rules.ts`, `@rpg/actions`). Do not edit by hand:
+  # `sync-config.integration.test.ts` fails when this query drifts from the compiled output. The
+  # authority sets a record's Visibility from its target, so a record is never wider than the target.
+  authorized_effects:
+    auto_subscribe: true
+    queries:
+      - >-
+        SELECT effect_applications.id, effect_applications.campaign_id,
+               effect_applications.actor_user_id, effect_applications.target_class,
+               effect_applications.target_id, effect_applications.action,
+               effect_applications.outcome, effect_applications.roll_id,
+               effect_applications.session_id, effect_applications.operations,
+               effect_applications.changes, effect_applications.edited,
+               effect_applications.visibility_mode, effect_applications.visibility_targets,
+               effect_applications.version, effect_applications.applied_at,
+               effect_applications.accepted_at
+        FROM effect_applications
+        INNER JOIN identity_campaign_memberships m ON m.campaign_id = effect_applications.campaign_id
+        WHERE m.user_id = auth.user_id() AND m.removed_at IS NULL
+          AND m.role IN '["owner","gm","assistant_gm","player"]'
+          AND (effect_applications.visibility_mode = 'everyone'
+            OR (effect_applications.visibility_mode = 'players'
+              AND auth.user_id() IN effect_applications.visibility_targets)
+            OR (m.role IN '["owner","gm","assistant_gm"]'
+              AND effect_applications.visibility_mode IN '["gm_only","players"]'))
+  # Feature 15: characters and their GM-only half. Compiled from the registered `character` and
+  # `character_secret` Resource Policies (`apps/api/src/modules/sync/sync-rules.ts`, `@rpg/characters`).
+  # Do not edit by hand: `sync-config.integration.test.ts` fails on drift. A character is `players:[owner]`,
+  # so another player never receives it; a secret row is `gm_only` and read by GM roles only, so a
+  # GM-only value never reaches a player's replica.
+  authorized_characters:
+    auto_subscribe: true
+    queries:
+      - >-
+        SELECT characters.id, characters.campaign_id, characters.owner_user_id, characters.system_id,
+               characters.system_version, characters.state, characters.visibility_mode,
+               characters.visibility_targets, characters.version, characters.created_at,
+               characters.updated_at, characters.created_by, characters.updated_by,
+               characters.deleted_at
+        FROM characters
+        INNER JOIN identity_campaign_memberships m ON m.campaign_id = characters.campaign_id
+        WHERE m.user_id = auth.user_id() AND m.removed_at IS NULL
+          AND m.role IN '["owner","gm","assistant_gm","player"]'
+          AND (characters.visibility_mode = 'everyone'
+            OR (characters.visibility_mode = 'players'
+              AND auth.user_id() IN characters.visibility_targets)
+            OR (m.role IN '["owner","gm","assistant_gm"]'
+              AND characters.visibility_mode IN '["gm_only","players"]'))
+      - >-
+        SELECT character_secrets.id, character_secrets.campaign_id, character_secrets.state,
+               character_secrets.visibility_mode, character_secrets.visibility_targets,
+               character_secrets.version, character_secrets.updated_at, character_secrets.deleted_at
+        FROM character_secrets
+        INNER JOIN identity_campaign_memberships m ON m.campaign_id = character_secrets.campaign_id
+        WHERE m.user_id = auth.user_id() AND m.removed_at IS NULL
+          AND m.role IN '["owner","gm","assistant_gm"]'
+          AND (character_secrets.visibility_mode = 'everyone'
+            OR (character_secrets.visibility_mode = 'players'
+              AND auth.user_id() IN character_secrets.visibility_targets)
+            OR (m.role IN '["owner","gm","assistant_gm"]'
+              AND character_secrets.visibility_mode IN '["gm_only","players"]'))
+  # Feature 18: sessions, GM notes, and log entries. Compiled from the registered `campaign_session`,
+  # `session_gm_note`, and `session_log_entry` Resource Policies (`apps/api/src/modules/sync/sync-rules.ts`,
+  # `@rpg/sessions`). Do not edit by hand: `sync-config.integration.test.ts` fails on drift. Notes are
+  # `gm_only` and read by GM roles only, so a player replica never holds them; an entry follows its own
+  # Visibility.
+  authorized_sessions:
+    auto_subscribe: true
+    queries:
+      - >-
+        SELECT campaign_sessions.id, campaign_sessions.campaign_id, campaign_sessions.number,
+               campaign_sessions.status, campaign_sessions.started_at, campaign_sessions.ended_at,
+               campaign_sessions.current_scene_id, campaign_sessions.participant_user_ids,
+               campaign_sessions.visibility_mode, campaign_sessions.visibility_targets,
+               campaign_sessions.version, campaign_sessions.created_at, campaign_sessions.updated_at,
+               campaign_sessions.created_by, campaign_sessions.updated_by, campaign_sessions.deleted_at
+        FROM campaign_sessions
+        INNER JOIN identity_campaign_memberships m ON m.campaign_id = campaign_sessions.campaign_id
+        WHERE m.user_id = auth.user_id() AND m.removed_at IS NULL
+          AND m.role IN '["owner","gm","assistant_gm","player"]'
+          AND (campaign_sessions.visibility_mode = 'everyone'
+            OR (campaign_sessions.visibility_mode = 'players'
+              AND auth.user_id() IN campaign_sessions.visibility_targets)
+            OR (m.role IN '["owner","gm","assistant_gm"]'
+              AND campaign_sessions.visibility_mode IN '["gm_only","players"]'))
+      - >-
+        SELECT session_gm_notes.id, session_gm_notes.campaign_id, session_gm_notes.body,
+               session_gm_notes.visibility_mode, session_gm_notes.visibility_targets,
+               session_gm_notes.version, session_gm_notes.created_at, session_gm_notes.updated_at,
+               session_gm_notes.created_by, session_gm_notes.updated_by, session_gm_notes.deleted_at
+        FROM session_gm_notes
+        INNER JOIN identity_campaign_memberships m ON m.campaign_id = session_gm_notes.campaign_id
+        WHERE m.user_id = auth.user_id() AND m.removed_at IS NULL
+          AND m.role IN '["owner","gm","assistant_gm"]'
+          AND (session_gm_notes.visibility_mode = 'everyone'
+            OR (session_gm_notes.visibility_mode = 'players'
+              AND auth.user_id() IN session_gm_notes.visibility_targets)
+            OR (m.role IN '["owner","gm","assistant_gm"]'
+              AND session_gm_notes.visibility_mode IN '["gm_only","players"]'))
+      - >-
+        SELECT session_log_entries.id, session_log_entries.campaign_id, session_log_entries.session_id,
+               session_log_entries.kind, session_log_entries.text, session_log_entries.subject_id,
+               session_log_entries.visibility_mode, session_log_entries.visibility_targets,
+               session_log_entries.version, session_log_entries.created_at,
+               session_log_entries.updated_at, session_log_entries.created_by,
+               session_log_entries.updated_by, session_log_entries.deleted_at
+        FROM session_log_entries
+        INNER JOIN identity_campaign_memberships m ON m.campaign_id = session_log_entries.campaign_id
+        WHERE m.user_id = auth.user_id() AND m.removed_at IS NULL
+          AND m.role IN '["owner","gm","assistant_gm","player"]'
+          AND (session_log_entries.visibility_mode = 'everyone'
+            OR (session_log_entries.visibility_mode = 'players'
+              AND auth.user_id() IN session_log_entries.visibility_targets)
+            OR (m.role IN '["owner","gm","assistant_gm"]'
+              AND session_log_entries.visibility_mode IN '["gm_only","players"]'))
+  # Feature 19: encounters, GM notes, participants, and instance states. Compiled from the registered
+  # `encounter`, `encounter_gm_note`, `encounter_participant`, and `encounter_participant_state` Resource
+  # Policies (`apps/api/src/modules/sync/sync-rules.ts`, `@rpg/encounters`). Do not edit by hand:
+  # `sync-config.integration.test.ts` fails on drift. Notes and instance states are `gm_only` and read by GM
+  # roles only, so a player replica never holds enemy statistics; a participant follows its own Visibility.
+  authorized_encounters:
+    auto_subscribe: true
+    queries:
+      - >-
+        SELECT encounters.id, encounters.campaign_id, encounters.session_id, encounters.name, encounters.status, encounters.started_at, encounters.ended_at, encounters.environment, encounters.location_id, encounters.visibility_mode, encounters.visibility_targets, encounters.version, encounters.created_at, encounters.updated_at, encounters.created_by, encounters.updated_by, encounters.deleted_at
+        FROM encounters
+        INNER JOIN identity_campaign_memberships m ON m.campaign_id = encounters.campaign_id
+        WHERE m.user_id = auth.user_id() AND m.removed_at IS NULL
+          AND m.role IN '["owner","gm","assistant_gm","player"]'
+          AND (encounters.visibility_mode = 'everyone'
+            OR (encounters.visibility_mode = 'players'
+              AND auth.user_id() IN encounters.visibility_targets)
+            OR (m.role IN '["owner","gm","assistant_gm"]'
+              AND encounters.visibility_mode IN '["gm_only","players"]'))
+      - >-
+        SELECT encounter_gm_notes.id, encounter_gm_notes.campaign_id, encounter_gm_notes.body, encounter_gm_notes.visibility_mode, encounter_gm_notes.visibility_targets, encounter_gm_notes.version, encounter_gm_notes.created_at, encounter_gm_notes.updated_at, encounter_gm_notes.created_by, encounter_gm_notes.updated_by, encounter_gm_notes.deleted_at
+        FROM encounter_gm_notes
+        INNER JOIN identity_campaign_memberships m ON m.campaign_id = encounter_gm_notes.campaign_id
+        WHERE m.user_id = auth.user_id() AND m.removed_at IS NULL
+          AND m.role IN '["owner","gm","assistant_gm"]'
+          AND (encounter_gm_notes.visibility_mode = 'everyone'
+            OR (encounter_gm_notes.visibility_mode = 'players'
+              AND auth.user_id() IN encounter_gm_notes.visibility_targets)
+            OR (m.role IN '["owner","gm","assistant_gm"]'
+              AND encounter_gm_notes.visibility_mode IN '["gm_only","players"]'))
+      - >-
+        SELECT encounter_participants.id, encounter_participants.campaign_id, encounter_participants.encounter_id, encounter_participants.label, encounter_participants.source_kind, encounter_participants.source_id, encounter_participants.position, encounter_participants.conditions, encounter_participants.visibility_mode, encounter_participants.visibility_targets, encounter_participants.version, encounter_participants.created_at, encounter_participants.updated_at, encounter_participants.created_by, encounter_participants.updated_by, encounter_participants.deleted_at
+        FROM encounter_participants
+        INNER JOIN identity_campaign_memberships m ON m.campaign_id = encounter_participants.campaign_id
+        WHERE m.user_id = auth.user_id() AND m.removed_at IS NULL
+          AND m.role IN '["owner","gm","assistant_gm","player"]'
+          AND (encounter_participants.visibility_mode = 'everyone'
+            OR (encounter_participants.visibility_mode = 'players'
+              AND auth.user_id() IN encounter_participants.visibility_targets)
+            OR (m.role IN '["owner","gm","assistant_gm"]'
+              AND encounter_participants.visibility_mode IN '["gm_only","players"]'))
+      - >-
+        SELECT encounter_participant_states.id, encounter_participant_states.campaign_id, encounter_participant_states.state, encounter_participant_states.visibility_mode, encounter_participant_states.visibility_targets, encounter_participant_states.version, encounter_participant_states.created_at, encounter_participant_states.updated_at, encounter_participant_states.created_by, encounter_participant_states.updated_by, encounter_participant_states.deleted_at
+        FROM encounter_participant_states
+        INNER JOIN identity_campaign_memberships m ON m.campaign_id = encounter_participant_states.campaign_id
+        WHERE m.user_id = auth.user_id() AND m.removed_at IS NULL
+          AND m.role IN '["owner","gm","assistant_gm"]'
+          AND (encounter_participant_states.visibility_mode = 'everyone'
+            OR (encounter_participant_states.visibility_mode = 'players'
+              AND auth.user_id() IN encounter_participant_states.visibility_targets)
+            OR (m.role IN '["owner","gm","assistant_gm"]'
+              AND encounter_participant_states.visibility_mode IN '["gm_only","players"]'))
+  # Feature 14: a member's own section marks (bookmark, last view). Compiled from the registered
+  # `rules_section_mark` Resource Policy (Ownership Rule on read, no exempt role): only the requester's
+  # rows, for every member role. Do not edit by hand: `sync-config.integration.test.ts` fails on drift.
+  authorized_rules_marks:
+    auto_subscribe: true
+    queries:
+      - >-
+        SELECT rules_section_marks.id, rules_section_marks.campaign_id, rules_section_marks.user_id, rules_section_marks.section_id, rules_section_marks.bookmarked, rules_section_marks.bookmark_changed_at, rules_section_marks.viewed_at, rules_section_marks.visibility_mode, rules_section_marks.visibility_targets, rules_section_marks.version, rules_section_marks.created_at, rules_section_marks.updated_at, rules_section_marks.created_by, rules_section_marks.updated_by, rules_section_marks.deleted_at
+        FROM rules_section_marks
+        INNER JOIN identity_campaign_memberships m ON m.campaign_id = rules_section_marks.campaign_id
+        WHERE m.user_id = auth.user_id() AND m.removed_at IS NULL
+          AND m.role IN '["owner","gm","assistant_gm","player"]'
+          AND rules_section_marks.user_id = auth.user_id()
+          AND (rules_section_marks.visibility_mode = 'everyone'
+            OR (rules_section_marks.visibility_mode = 'players'
+              AND auth.user_id() IN rules_section_marks.visibility_targets)
+            OR (m.role IN '["owner","gm","assistant_gm"]'
+              AND rules_section_marks.visibility_mode IN '["gm_only","players"]'))
+  # Feature 03 task 07: the requesting user's own membership rows, including removal tombstones,
+  # with exactly the feature 01 `_db.md` cache fields. No other user's row, no credential field.
+  # Unaliased: PowerSync names the synced table after the alias, and clients read
+  # `identity_campaign_memberships`.
+  current_user_memberships:
+    auto_subscribe: true
+    query: >-
+      SELECT campaign_id AS id, campaign_id, user_id, role, version, updated_at, removed_at
+      FROM identity_campaign_memberships
+      WHERE user_id = auth.user_id()
+  # Feature 06 task 04: the two physical audit stores, each in its own stream. Compiled from the
+  # registered Resource Policies and the audit store bindings (`apps/api/src/modules/sync/
+  # sync-rules.ts`, `compileAuditProviderQueries`). Do not edit by hand:
+  # `sync-config.integration.test.ts` fails on drift. An event reaches a requester only when the
+  # target's current row and class rule, the event's stored snapshot, and (private store) the GM
+  # reading roles all allow it; classes the provider cannot prove (server-only, Ownership Rule on
+  # read) have no audit query and stay online-only. Not subscribed by default: a device
+  # subscribes per (campaign_id, month) window, and to `gm_private_audit` only while it holds a GM
+  # role in that campaign. `campaign_sequence`, the snapshot, and the origin mutation never
+  # replicate (sequence gaps would count hidden events).
+  campaign_audit:
+    auto_subscribe: false
+    queries:
+      - >-
+        SELECT audit_campaign_events.id, audit_campaign_events.campaign_id,
+               audit_campaign_events.session_id, audit_campaign_events.actor_user_id,
+               audit_campaign_events.actor_role, audit_campaign_events.action,
+               audit_campaign_events.target_type, audit_campaign_events.target_id,
+               audit_campaign_events.before_value, audit_campaign_events.after_value,
+               audit_campaign_events.client_recorded_at, audit_campaign_events.accepted_at,
+               audit_campaign_events.renderer_version
+        FROM audit_campaign_events
+        INNER JOIN identity_campaign_memberships m ON m.campaign_id = audit_campaign_events.campaign_id
+        INNER JOIN campaigns ON campaigns.id = audit_campaign_events.campaign_id
+        WHERE m.user_id = auth.user_id() AND m.removed_at IS NULL
+          AND audit_campaign_events.campaign_id = subscription.parameter('campaign_id')
+          AND campaigns.id = subscription.parameter('campaign_id')
+          AND substring(audit_campaign_events.accepted_at, 1, 7) = subscription.parameter('month')
+          AND audit_campaign_events.target_type = 'campaign'
+          AND audit_campaign_events.target_id = audit_campaign_events.campaign_id
+          AND campaigns.deleted_at IS NULL
+          AND m.role IN '["owner","gm","assistant_gm","player"]'
+          AND (json_extract(audit_campaign_events.target_visibility, '$.visibility.mode') = 'everyone'
+            OR (json_extract(audit_campaign_events.target_visibility, '$.visibility.mode') = 'players'
+              AND auth.user_id() IN json_extract(audit_campaign_events.target_visibility, '$.visibility.playerIds'))
+            OR (m.role IN '["owner","gm","assistant_gm"]'
+              AND json_extract(audit_campaign_events.target_visibility, '$.visibility.mode') IN '["gm_only","players"]'))
+  gm_private_audit:
+    auto_subscribe: false
+    queries:
+      - >-
+        SELECT audit_private_events.id, audit_private_events.campaign_id,
+               audit_private_events.session_id, audit_private_events.actor_user_id,
+               audit_private_events.actor_role, audit_private_events.action,
+               audit_private_events.target_type, audit_private_events.target_id,
+               audit_private_events.before_value, audit_private_events.after_value,
+               audit_private_events.client_recorded_at, audit_private_events.accepted_at,
+               audit_private_events.renderer_version
+        FROM audit_private_events
+        INNER JOIN identity_campaign_memberships m ON m.campaign_id = audit_private_events.campaign_id
+        INNER JOIN campaigns ON campaigns.id = audit_private_events.campaign_id
+        WHERE m.user_id = auth.user_id() AND m.removed_at IS NULL
+          AND audit_private_events.campaign_id = subscription.parameter('campaign_id')
+          AND campaigns.id = subscription.parameter('campaign_id')
+          AND substring(audit_private_events.accepted_at, 1, 7) = subscription.parameter('month')
+          AND audit_private_events.target_type = 'campaign'
+          AND audit_private_events.target_id = audit_private_events.campaign_id
+          AND campaigns.deleted_at IS NULL
+          AND m.role IN '["owner","gm","assistant_gm","player"]'
+          AND (json_extract(audit_private_events.target_visibility, '$.visibility.mode') = 'everyone'
+            OR (json_extract(audit_private_events.target_visibility, '$.visibility.mode') = 'players'
+              AND auth.user_id() IN json_extract(audit_private_events.target_visibility, '$.visibility.playerIds'))
+            OR (m.role IN '["owner","gm","assistant_gm"]'
+              AND json_extract(audit_private_events.target_visibility, '$.visibility.mode') IN '["gm_only","players"]'))
+          AND m.role IN '["owner","gm","assistant_gm"]'

@@ -264,13 +264,30 @@ Not worth an ADR now: the stack choices, already recorded in `PRD.md` s.91 and
 
 ## Open Questions
 
-Resolved during wave 0 by the developers, not blocking this techspec:
+All resolved; kept for the record:
 
-- TODO: Bun Workspaces alone, or Bun Workspaces plus Turborepo. `docs/SPEC_GUIDELINE.md` permits
-  either "when present"; nothing is present. Affects CI wiring only.
-- TODO: Vitest or Bun Test. Guideline permits either when consistent with existing configuration,
-  and there is no existing configuration.
-- TODO: Seed values for the `CapabilityKey` registry. Feature 08 owns the union and fills it in
-  wave 1; wave 0 needs only the branded type so consumers compile.
-- TODO: Concrete value for the local database size budget (FR-013). Needs the fixture campaign
-  measured, so it lands late in wave 0 rather than early.
+- Bun Workspaces alone. The root `package.json` declares the workspaces and there is no Turborepo
+  configuration.
+- Bun Test (`bun test`) for unit and integration tests, Playwright for end-to-end.
+- `CapabilityKey` is the closed `CAPABILITY_KEYS` registry in `system.ts`, filled by feature 08
+  (`2026-10-30-capability-registry-contract-change.md`).
+- FR-013: 60 MB per synchronized campaign, on disk (`freeze-decisions.md`).
+
+## Web Shell (2026-11-21, after features 00 to 20)
+
+Recorded for the owner's final audit; a delegated decision, not yet reviewed.
+
+- One stylesheet, `apps/web/src/styles.css`, styles semantic elements. Features keep rendering
+  classless semantic HTML; only the shell (`apps/web/src/shell.tsx`, the dashboard, the sign-in
+  page) adds classes. Dark by default (the PWA theme color), light under
+  `prefers-color-scheme: light`. No CSS framework or new dependency.
+- The dashboard keeps every area rendered on one page and adds a side navigation that only
+  scrolls. Tabs that hide areas were rejected: feature routes (`#/<area>/<id>`) scroll their own
+  panel into view, and the acceptance suites expect each area on screen. The navigation never
+  writes the location hash, so it cannot collide with those routes.
+- The campaign list is selectable. The picked campaign drives the replica sources, administration,
+  history, offline attachments, and export; before this, administration, history, and attachments
+  always used the first listed campaign while sync could use another. Creating a campaign selects
+  it.
+- Feature overlays (quick create, reveal, encounter tracker, command palette) lost their inline
+  positioning; the stylesheet styles every `role="dialog"` with `aria-modal="true"`.

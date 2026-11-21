@@ -159,14 +159,18 @@ meaningful. They are not meaningful everywhere. Recommended per feature:
 | --- | --- | --- | --- |
 | 01, 02, 05, 15, 16, 17, 18, 19 | yes | — | yes |
 | 03, 04 | yes | yes | yes |
-| 11 | yes | yes | — |
+| 11 | yes | yes | yes (its own `effect_applications` ledger) |
 | 06, 07, 14, 20 | light | — | yes (06, 07) |
 | 08 | light | — | — |
-| 09, 10, 12, 13 | no | — | no |
+| 09 | yes | — | yes |
+| 10 | light | — | no |
+| 12, 13 | no | — | no |
 
 Reasoning for the exclusions, so nobody adds ceremony back:
 
-- `09`, `10` are pure functions with no persistence. Unit tests are the specification.
+- `10` is a pure function with no persistence. Unit tests are the specification; its BDD is a table of them.
+- `09` looked the same when this table was written, but FR-009 and the hidden-roll rules persist and
+  synchronize records, so it carries BDD and a data design.
 - `12`, `13` are declarative data, not behavior. The conformance kit (08 FR-013) is their test.
 - `03`, `04`, `11` carry real domain rules — conflict strategy, permission resolution, effect
   application — and are the three features where a `_domain.md` earns its cost.

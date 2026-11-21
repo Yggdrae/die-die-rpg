@@ -46,4 +46,20 @@ describe('api shell', () => {
     expect(check(ApiError, response.json())).toBe(true);
     await app.close();
   });
+
+  test('request logs never carry an invitation token from the path', async () => {
+    const lines: string[] = [];
+    const app = buildApp({ logger: { stream: { write: (line) => lines.push(line) } } });
+    app.get('/invitations/:token', async () => ({}));
+    app.post('/invitations/:token/accept', async () => ({}));
+    const token = `${'A'.repeat(21)}_secretTokenValue-xyz`;
+
+    await app.inject({ method: 'GET', url: `/invitations/${token}` });
+    await app.inject({ method: 'POST', url: `/invitations/${token}/accept` });
+
+    const log = lines.join('');
+    expect(log).toContain('/invitations/[redacted]');
+    expect(log).not.toContain(token);
+    await app.close();
+  });
 });
