@@ -144,3 +144,53 @@ interface and follow feature 00's contract-change note/review process.
 - Credentials, binary attachments, audit data, URLs, and object keys are absent.
 - Visibility never widens after ID remap.
 
+## Implementation Notes (2026-10-27, tasks 02–05)
+
+- **`export_jobs`.**
+  - Shipped in migration `packages/identity/drizzle/0009_export_jobs.sql` with the columns above.
+  - CHECK constraints: state, lifecycle (terminal ⇔ `completed_at`, completed ⇔ checksum,
+    failed ⇔ `error_code`), 32-byte checksum, and an error-code pattern.
+  - Retention: rows older than 30 days are hard-deleted in database time (exclusive), on an hourly
+    API loop.
+  - The table is not published to the sync provider.
+- **Package bytes.** They are held only in an in-process, per-user store with a 10-minute TTL, and
+  are released on delivery or expiry. A multi-instance deployment needs sticky routing or a shared
+  temporary store.
+- **Export consistency deviation.**
+  - The frozen `export(campaignId)` cannot join a `REPEATABLE READ` transaction.
+  - Online export therefore reads every contributor twice in module order and accepts only equal
+    canonical checksums. Versions only increase, so a mixed authority state cannot repeat.
+  - It retries up to 3 comparisons, then `snapshot_unstable`.
+- **Offline export.**
+  - Uses one replica cursor: complete and equal before and after the reads.
+  - The current browser replica lacks the exact system and module pins and the attachment
+    metadata, so it refuses with `incomplete_replica`.
+- **Feature 05 retention.** `RetainedAttachmentReferences` now receives `{id, campaignId}`. Every
+  attachment of a campaign with a `requested` or `running` export is retained.
+- **Import tables:** built in task 06 (see below).
+
+## Implementation Notes (2026-10-28, tasks 01, 06, 07)
+
+- **Migration `0010_import_jobs`** adds `import_jobs` and `import_preserved_chunks` as designed above.
+  - `import_jobs` CHECKs: state, lifecycle (terminal ⇔ `completed_at`, completed ⇔
+    `campaign_id`, failed ⇔ `error_code`), 32-byte manifest checksum (nullable: a package that
+    never parsed has none), error-code pattern, report is a JSON object. Safe failure details
+    (module id, contributor safe code, unavailable pins) live in `report.failure`.
+  - Retention: rows older than 90 days are hard-deleted in database time (exclusive), on the same
+    hourly API loop as export jobs.
+  - `import_preserved_chunks`: module/version pattern CHECKs, 32-byte `payload_checksum`. Export
+    refuses a preserved payload whose canonical checksum no longer matches.
+  - Neither table is published to the sync provider. No FK to `campaigns` (guard rule 11 forbids
+    importing feature 02's schema); rows are written only inside the import transaction.
+- **Atomic import** follows steps 1–7. The transaction is opened by feature 07
+  (`PostgresImportTransactions`); feature 02 creates the campaign and feature 01 the sole owner on
+  it through `PostgresCampaignRepository.createWithin`; the job completes on the same transaction.
+  Any contributor failure rolls everything back (proved over PostgreSQL).
+- **IDs:** new ids are `SHA-256(job id, kind, source id)` as version 8 UUIDs, so retrying one job plans
+  the same ids and a new job never collides.
+- **Attachments:** P0 restores no attachment rows (no binaries); the report counts them as
+  `attachment_binary_not_restored`. No object-storage call happens during import.
+- **Visibility:** feature 04 `visibilityForImport` narrows any targeted audience without a
+  mapping to `gm_only` with a warning; the only accepted member mapping targets the importer.
+- **Known limit:** a preserved payload containing a JSON ` ` cannot be stored in `jsonb`; such an
+  import fails whole (`import_failed`).

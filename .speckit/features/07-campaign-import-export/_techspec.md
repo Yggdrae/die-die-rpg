@@ -4,10 +4,39 @@ Source: `_prd.md`, `_bdd.md`, `_db.md`, frozen registry contracts, and Track A f
 
 ## Current Facts
 
-- `ExportableModule`/`ExportChunk` exist in `@rpg/contracts`, but no registry implementation,
-  contributor, campaign package, ZIP dependency, import transaction coordinator, or UI exists.
-- The frozen `import(campaignId, chunk)` result cannot carry a shared transaction, ID map, warnings,
-  or restore report. Atomic multi-contributor import cannot be honestly implemented with it.
+Feature 16 note (2026-10-30): `content` (`entities/content.json`) is registered; `ContentExporter` is
+its own `ImportableModule` and the first P0 contributor that restores targeted records, so Visibility
+narrowing now has a production path. Personal notes are never exported. See feature 16 tasks 15, 17.
+
+Updated 2026-10-27, after tasks 02–05.
+
+- `packages/campaign-portability` exists. It holds:
+  - the bounded `.rpgpack` writer and inspector, hand-written ZIP with no new dependency;
+  - `ExportRegistry`, `ExportOrchestrator` and the forbidden-data scanner;
+  - online export jobs (`export_jobs`, migration `0009`);
+  - the offline replica consistency.
+- Registered P0 contributors:
+  - `campaign`: feature 02 `CampaignExporter`, the campaign root plus exact pins.
+  - `attachments`: feature 05 `AttachmentManifestExporter`, manifest only.
+- Online export: `POST /campaigns/:campaignId/exports`, `GET /exports/:jobId`, and
+  `GET /exports/:jobId/file`. All three use `ContentAccess.requireResource`, capability
+  `export` on `campaign`, which is `owner`/`gm` only.
+- Consistency (no transaction can be shared through the frozen `export`):
+  - Online uses a verified double read.
+  - Offline uses a replica cursor with completeness.
+- The browser replica cannot prove completeness today (no exact pins, no attachment metadata), so
+  offline export refuses with `incomplete_replica`.
+- Import (updated 2026-10-28, tasks 01, 06, 07):
+  - The transaction-aware contract (`ImportableModule`, `ImportContext`, `ImportResult`,
+    `ImportWarning`, opaque `ImportTransaction`) was ratified 2026-10-28 by repository owner
+    delegation and added to `@rpg/contracts` additively. The frozen `import` is never called.
+  - `planImport` (write-free) and `ImportCoordinator` (one PostgreSQL transaction opened by feature
+    07) live in `@rpg/campaign-portability`; jobs and preserved chunks in migration `0010`.
+  - Contributors: feature 02 `CampaignImporter` (campaign + sole owner via feature 01 on the
+    import transaction), feature 05 manifest (restores nothing, reports binaries), feature 04
+    `visibilityForImport` narrowing rule.
+  - API: `POST /imports/:jobId` (inspect + commit in one request) and `GET /imports/:jobId`.
+  - UI: `CampaignImport` on the dashboard.
 - Attachment binary inclusion and audit export are later scope; P0 is manifest-only/no audit.
 
 ## Proposed Architecture
@@ -120,7 +149,7 @@ unmapped targeted Visibility to `gm_only` and emit a warning. This is a narrowin
 - P0 attachments are manifest only; audit is excluded.
 - Exact unavailable system blocks import before write.
 - Unknown chunks are preserved opaquely.
-- Blocking: approve and land the import-contract revision.
-- Blocking: feature 02 campaign creation and all required P0 contributors must expose transaction-
-  aware import adapters before import can be enabled. Export can ship earlier.
+- Resolved 2026-10-28: the import-contract revision is ratified and landed (task 01).
+- Resolved 2026-10-28: feature 02 (campaign + feature 01 owner) and feature 05 (manifest) expose
+  transaction-aware import; import is enabled (tasks 06, 07).
 
