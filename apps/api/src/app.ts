@@ -1,7 +1,7 @@
 import type { TypeBoxTypeProvider } from '@fastify/type-provider-typebox';
 import { type ApiError, apiError, ErrorCode } from '@rpg/contracts';
 import { Type } from '@sinclair/typebox';
-import Fastify, { type FastifyError, type FastifyInstance } from 'fastify';
+import Fastify, { type FastifyError, type FastifyInstance, type FastifyRequest } from 'fastify';
 
 /**
  * Fastify shell. No domain routes, no authentication, no persistence.
@@ -19,12 +19,36 @@ const HealthResponse = Type.Object({
 
 export interface BuildOptions {
   readonly version?: string;
-  readonly logger?: boolean;
+  /** `true` logs to stdout; a stream captures log lines (tests). */
+  readonly logger?: boolean | { readonly stream: { write(line: string): void } };
 }
+
+/** Invitation tokens travel in the path; request logs must never carry them. */
+export function redactCredentialPath(url: string): string {
+  return url.replace(/^\/invitations\/[^/?#]+/, '/invitations/[redacted]');
+}
+
+const requestLogSerializers = {
+  req(request: FastifyRequest) {
+    return {
+      method: request.method,
+      url: redactCredentialPath(request.url),
+      host: request.host,
+      remoteAddress: request.ip,
+      remotePort: request.socket?.remotePort,
+    };
+  },
+};
 
 export function buildApp(options: BuildOptions = {}): FastifyInstance {
   const app = Fastify({
-    logger: options.logger ?? false,
+    logger:
+      options.logger === undefined || options.logger === false
+        ? false
+        : {
+            serializers: requestLogSerializers,
+            ...(options.logger === true ? {} : { stream: options.logger.stream }),
+          },
     ajv: { customOptions: { removeAdditional: false } },
   }).withTypeProvider<TypeBoxTypeProvider>();
 
@@ -51,6 +75,19 @@ export function buildApp(options: BuildOptions = {}): FastifyInstance {
         },
       );
       return reply.status(400).send(body);
+    }
+
+    // Fastify's own request rejections (body too large, unsupported media type, malformed body)
+    // are client errors: keep their status with a fixed safe code, never their message.
+    const status = error.statusCode;
+    if (error.code?.startsWith('FST_') && status !== undefined && status >= 400 && status < 500) {
+      const code =
+        status === 413
+          ? 'payload_too_large'
+          : status === 415
+            ? 'unsupported_media_type'
+            : 'bad_request';
+      return reply.status(status).send(apiError(code, 'Request rejected.'));
     }
 
     request.log.error({ err: error }, 'unhandled error');
