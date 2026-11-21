@@ -68,7 +68,7 @@ visible to them. Developers and operators investigating a defect or a permission
 - FR-005: Events recorded for at least: membership and role changes (01), campaign creation,
   deletion and system version change (02), visibility and reveal changes (04, 17), attachment
   upload and delete (05), character resource and field changes (15), entity create, update and
-  delete (16), session start and end (18), encounter changes (19), and roll results (09).
+  delete (16), session start and end (18), encounter changes (19), effect applications (11), and roll results (09).
 - FR-006: Human-readable rendering per event type, contributed by the owning feature, so the log
   reads as "GM revealed Weathered Letter to Player A" rather than as a field diff (`PRD.md` s.67).
 - FR-007: Campaign-scoped and session-scoped log views, in reverse chronological order, filterable
@@ -147,5 +147,6 @@ store without changing call sites. Rendering contributions (FR-006) arrive per f
 
 - TODO: Retention window for audit events, and whether it differs between the public and private stores.
 - TODO: Whether the audit log is included in `.rpgpack` export by default (`PRD.md` s.65 does not list it).
-- TODO: Whether roll results live in the audit log, in the session log (feature 18), or in both.
-  Duplication here would double volume for the most frequent event in the product.
+- Resolved by feature 09 (`09-dice-engine/_techspec.md` D-08): roll results live in feature 09's own
+  store and are not audit events. This feature reads them through the feature 09 API, and no roll writes
+  an audit row, so FR's "roll results (09)" entry is served by that read, not by a second copy.

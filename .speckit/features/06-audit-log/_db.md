@@ -94,8 +94,27 @@ is partial. Private and campaign stores share the 10 MB ceiling but never exchan
 
 P0 PostgreSQL retention is 365 days from `accepted_at`. Maintenance deletes only rows older than
 the boundary and only after all eligible sync subscribers acknowledge a cursor beyond them. This
-is retention, not application deletion, and runs separately for each table. The 365-day default is
-a proposed operational policy; changing it requires product approval before implementation.
+is retention, not application deletion, and runs separately for each table. The 365-day policy is
+Approved (2026-10-28, delegated by owner); changing it requires product approval. The account
+store follows the same 365 days and, never being replicated, has no watermark condition.
+
+Watermark acknowledgement (feature 03 `sync_replica_watermarks`, scopes `audit_campaign_events`
+and `audit_private_events`):
+
+- Replicas never see `campaign_sequence`. After a consistent checkpoint, once every month of its
+  window has synced, a replica posts `POST /sync/replicas/:campaignId/ack` with
+  `{ replicaId, tableName, throughEventId }`: the newest accepted event it durably holds in that
+  store. Older visible events are either held too or deliberately not kept (compaction).
+- The authority resolves the event to its sequence only if it is in that campaign and store and
+  the user may read it now (the audit API decision, GM-only for the private store). Unknown,
+  hidden, or foreign events answer the same `204` and move nothing. A raw `sequence` for an audit
+  scope is a `400`.
+- Eligible subscribers per scope are the replicas whose user can receive that store now (campaign
+  readers; GM roles for the private store), subscribed at or before the newest eligible row.
+
+Deletion is OFF by default: only `AUDIT_RETENTION_DELETE=true` (API process or retention CLI)
+enables it. It then deletes unblocked groups only, in bounded batches, as `rpg_audit_maintenance`
+with `rpg.audit_retention = on`, never past the sequence the watermark decision covered.
 
 No archive is created in P0. P1 may add archival/export but cannot weaken private-store separation.
 Audit is excluded from P0 `.rpgpack` export.
@@ -113,7 +132,8 @@ fallback for retained rows.
 2. Register sync rules independently and prove the player publication cannot address the private table.
 3. Enable contributor writes behind the recorder adapter; no backfill is fabricated for historical
    mutations that occurred before audit existed.
-4. Enable retention only after watermark tests pass; start in report-only mode.
+4. Enable retention only after watermark tests pass; start in report-only mode. (Watermark tests
+   pass as of 2026-10-28; deletion stays operator-enabled, report-only by default.)
 
 ## Required Data Tests
 

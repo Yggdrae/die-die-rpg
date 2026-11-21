@@ -5,8 +5,12 @@ Source: `_prd.md`, `_bdd.md`, `_db.md`, frozen audit contracts, and features 03/
 ## Current Facts
 
 - `AuditEvent` and non-blocking `AuditRecorder` exist in `@rpg/contracts`.
-- Feature 01 specs reference the recorder, but no audit storage, renderer registry, query API, UI,
-  or sync rules exist.
+- As of 2026-10-26, `packages/audit` provides the two stores and renderer registry (task 01), the
+  durable recorder with in-transaction mutation envelopes (task 02), and the authorized query API
+  (task 03); task 04 adds separate audit streams and local compaction, task 05 the log UI, task 06
+  contributor registrations, a conformance inventory, and report-only retention. On 2026-10-28
+  replicas acknowledge synced audit rows through feature 03's ack route (event ID, resolved to a
+  sequence server-side) and a deletion executor exists, off unless `AUDIT_RETENTION_DELETE=true`.
 - The frozen contract has a `private` routing flag and client `at`; it has no authority sequence or
   renderer version. These remain persistence/module metadata and do not require changing the event
   shape returned by contributors.
@@ -44,14 +48,19 @@ code path chooses a table during reads based on a client flag.
 | GET | `/campaigns/:campaignId/sessions/:sessionId/audit` | current member plus per-target read | session scope |
 
 Queries accept cursor, limit, actor ID, target type, and target ID. Cursor is authority campaign
-sequence, not timestamp/offset. Server filters authorization before producing rows, totals, or next
-cursor. Raw before/after JSON is never returned directly; renderer output is a safe structured
-description with optional already-authorized display values.
+sequence, not timestamp/offset. The cursor token is the last returned event ID, resolved server-side
+to its sequence among permitted rows only; raw sequence values are not returned, because gaps would
+disclose hidden events. Each event is decided on its target's current feature 04 facts and on its
+stored snapshot (the snapshot narrows, never widens); the private route additionally requires a
+GM-only read of the campaign. Undeclared target classes fail closed (task 03). Server filters
+authorization before producing rows, totals, or next cursor. Raw before/after JSON is never
+returned directly; renderer output is a safe structured description with optional
+already-authorized display values.
 
 ## Persistence, Sync, and Retention
 
 Implement `_db.md`: physically separate stores, sequence allocator, immutable privileges/triggers,
-365-day proposed server retention, and 10 MB local compaction preserving pending and 90-day rows.
+365-day server retention (approved 2026-10-28), and 10 MB local compaction preserving pending and 90-day rows.
 
 Feature 03 synchronizes a domain mutation and its audit envelope together. Feature 04 supplies
 target predicates. Player subscription configuration cannot address the private table. Offline
@@ -94,8 +103,10 @@ event cannot corrupt domain state. There is no blob, CRDT, or general realtime r
 - Audit is excluded from P0 export.
 - Roll results have one authoritative owner in feature 09 and may emit summarized audit events;
   feature 06 does not duplicate full roll records.
-- Proposed server retention is 365 days. Product approval is required before enabling deletion;
-  until approval, the maintenance job runs report-only.
-- Blocking: feature 03 must expose the durable mutation-envelope participant before offline atomicity
-  can ship.
+- Server retention is 365 days: Approved (2026-10-28, delegated by owner). Deletion runs only when
+  an operator sets `AUDIT_RETENTION_DELETE=true` (runtime option `auditRetention.delete`, default
+  off); otherwise the maintenance job is report-only. Blocked groups (unacknowledged replica,
+  pending reference, no watermark evidence) are never deleted.
+- Membership events (`campaign_membership`) are readable by GM roles only: Approved (2026-10-28,
+  delegated by owner).
 
