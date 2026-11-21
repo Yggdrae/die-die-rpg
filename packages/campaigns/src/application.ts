@@ -1,4 +1,11 @@
-import { type ActorRef, type AuditRecorder, err, ok, type Result } from '@rpg/contracts';
+import {
+  type ActorRef,
+  type AuditRecorder,
+  err,
+  ok,
+  type Result,
+  type Visibility,
+} from '@rpg/contracts';
 import type { CampaignMembershipWriter } from '@rpg/identity';
 import type {
   CampaignContext,
@@ -31,18 +38,42 @@ export interface CampaignRecord extends CampaignView {
   readonly deletedAt?: string;
 }
 
+export interface CampaignSettingRecord {
+  readonly value: unknown;
+  readonly version: number;
+}
+
+/**
+ * Feature 04 decision for an identity-resolved actor. For `write_setting` it must also apply the
+ * namespace's declared `writableRoles` (and deny an unknown namespace); this service compares
+ * no roles itself.
+ */
 export interface CampaignAccessPolicy {
   decide(
     actor: ActorRef,
     capability: 'read' | 'update' | 'delete' | 'update_system' | 'write_setting',
     namespace?: string,
+    /** Visibility of the campaign-scoped value read; `everyone` when omitted. */
+    visibility?: Visibility,
   ): boolean;
 }
+
+/**
+ * Runs inside the repository transaction that applied a write, after the write matched. It
+ * receives that transaction's opaque handle, which only the composition-root adapter may inspect.
+ * Its use is feature 06 same-transaction audit for synced mutations.
+ *
+ * If it throws, the write rolls back and is reported as `persistence_unavailable`. A repository
+ * with no transaction, or a call that writes nothing (idempotent create), never calls it. Its
+ * caller then records after commit.
+ */
+export type CampaignTransactionParticipant = (transaction: unknown) => Promise<void>;
 
 export interface CampaignRepository {
   create(
     record: CampaignRecord,
     ownerWriter: CampaignMembershipWriter,
+    withinTransaction?: CampaignTransactionParticipant,
   ): Promise<
     Result<
       { readonly record: CampaignRecord; readonly created: boolean },
@@ -55,13 +86,21 @@ export interface CampaignRepository {
     campaignId: string,
     input: CampaignDetailsUpdateInput,
     actorUserId: string,
+    withinTransaction?: CampaignTransactionParticipant,
   ): Promise<Result<CampaignRecord, 'not_found' | 'version_conflict' | 'persistence_unavailable'>>;
+  /** Active namespaced setting with its own record version. */
+  getSetting(
+    campaignId: string,
+    namespace: string,
+  ): Promise<(CampaignSettingRecord & { readonly memberVisible: boolean }) | undefined>;
+  /** `input.expectedVersion` is the setting version; `null` only when the namespace is unset. */
   updateSetting(
     campaignId: string,
     namespace: string,
     input: CampaignSettingUpdateInput,
     actorUserId: string,
     memberVisible: boolean,
+    withinTransaction?: CampaignTransactionParticipant,
   ): Promise<Result<CampaignRecord, 'not_found' | 'version_conflict' | 'persistence_unavailable'>>;
   updateSystemPin(
     campaignId: string,
@@ -73,6 +112,7 @@ export interface CampaignRepository {
     campaignId: string,
     expectedVersion: number,
     actorUserId: string,
+    withinTransaction?: CampaignTransactionParticipant,
   ): Promise<Result<void, 'not_found' | 'version_conflict' | 'persistence_unavailable'>>;
 }
 
@@ -97,9 +137,15 @@ export class CampaignService implements CampaignContextResolver {
     private readonly log: CampaignLog,
   ) {}
 
+  /**
+   * `withinTransaction` is passed to the repository write (create, updateDetails, updateSetting,
+   * delete). It is only for callers whose audit travels with the write, which are synced
+   * mutations with an envelope and a service built with a discarding recorder.
+   */
   async create(
     userId: string,
     input: CampaignCreateInput,
+    withinTransaction?: CampaignTransactionParticipant,
   ): Promise<Result<CampaignView, CampaignError>> {
     const system = await this.catalog.resolveExact(input.system);
     if (system === undefined) return err('system_unavailable');
@@ -120,7 +166,7 @@ export class CampaignService implements CampaignContextResolver {
       updatedAt: now,
       createdBy: userId,
     };
-    const created = await this.repository.create(record, this.ownerWriter);
+    const created = await this.repository.create(record, this.ownerWriter, withinTransaction);
     if (!created.ok) return created;
     if (created.value.created) {
       await this.recordAudit('campaign.created', created.value.record, userId, undefined, {
@@ -130,8 +176,21 @@ export class CampaignService implements CampaignContextResolver {
     return ok(toView(created.value.record));
   }
 
+  /**
+   * Feature 07: records that an import created this campaign, after the import transaction
+   * committed (like `create`, audit is post-commit and degrades without failing the import).
+   */
+  async recordImported(userId: string, campaignId: string): Promise<void> {
+    const record = await this.repository.get(campaignId);
+    if (record === undefined || record.createdBy !== userId) return;
+    await this.recordAudit('campaign.imported', record, userId, undefined, {
+      system: record.system,
+    });
+  }
+
   async list(userId: string): Promise<readonly CampaignView[]> {
-    return (await this.repository.list(await this.actors.listCampaignIds(userId))).map(toView);
+    const records = await this.repository.list(await this.actors.listCampaignIds(userId));
+    return records.filter((record) => record.deletedAt === undefined).map(toView);
   }
 
   async get(userId: string, campaignId: string): Promise<Result<CampaignView, CampaignError>> {
@@ -147,13 +206,19 @@ export class CampaignService implements CampaignContextResolver {
     userId: string,
     campaignId: string,
     input: CampaignDetailsUpdateInput,
+    withinTransaction?: CampaignTransactionParticipant,
   ): Promise<Result<CampaignView, CampaignError>> {
     const authorized = await this.authorize(userId, campaignId, 'update');
     if (!authorized.ok) return authorized;
     const current = await this.repository.get(campaignId);
     if (current === undefined || current.deletedAt !== undefined)
       return err('not_found_or_forbidden');
-    const updated = await this.repository.updateDetails(campaignId, input, userId);
+    const updated = await this.repository.updateDetails(
+      campaignId,
+      input,
+      userId,
+      withinTransaction,
+    );
     if (!updated.ok) return err(mapRepositoryError(updated.error));
     await this.recordAudit(
       'campaign.details_updated',
@@ -171,25 +236,21 @@ export class CampaignService implements CampaignContextResolver {
     campaignId: string,
     namespace: string,
     input: CampaignSettingUpdateInput,
+    withinTransaction?: CampaignTransactionParticipant,
   ): Promise<Result<CampaignView, CampaignError>> {
     const invalid = this.settings.validate(namespace, input.value);
     if (invalid !== undefined) return err(invalid);
     const registration = this.settings.get(namespace);
     if (registration === undefined) return err('unregistered_setting_namespace');
     const authorized = await this.authorize(userId, campaignId, 'write_setting', namespace);
-    if (
-      !authorized.ok ||
-      authorized.value.role === 'observer' ||
-      !registration.writableRoles.includes(authorized.value.role)
-    ) {
-      return err('not_found_or_forbidden');
-    }
+    if (!authorized.ok) return authorized;
     const updated = await this.repository.updateSetting(
       campaignId,
       namespace,
       input,
       userId,
       registration.memberVisible,
+      withinTransaction,
     );
     if (!updated.ok) return err(mapRepositoryError(updated.error));
     if (registration.memberVisible) {
@@ -205,6 +266,29 @@ export class CampaignService implements CampaignContextResolver {
       );
     }
     return ok(toView(updated.value));
+  }
+
+  async getSetting(
+    userId: string,
+    campaignId: string,
+    namespace: string,
+  ): Promise<Result<CampaignSettingRecord, CampaignError>> {
+    const authorized = await this.authorize(userId, campaignId, 'read');
+    if (!authorized.ok) return authorized;
+    const campaign = await this.repository.get(campaignId);
+    if (campaign === undefined || campaign.deletedAt !== undefined) {
+      return err('not_found_or_forbidden');
+    }
+    const setting = await this.repository.getSetting(campaignId, namespace);
+    if (setting === undefined) return err('not_found_or_forbidden');
+    // A setting that is not member-visible reads like a GM-only record (same as its sync stream).
+    if (
+      !setting.memberVisible &&
+      !this.access.decide(authorized.value, 'read', namespace, { mode: 'gm_only' })
+    ) {
+      return err('not_found_or_forbidden');
+    }
+    return ok({ value: setting.value, version: setting.version });
   }
 
   async updateSystem(
@@ -269,13 +353,19 @@ export class CampaignService implements CampaignContextResolver {
     userId: string,
     campaignId: string,
     expectedVersion: number,
+    withinTransaction?: CampaignTransactionParticipant,
   ): Promise<Result<void, CampaignError>> {
     const authorized = await this.authorize(userId, campaignId, 'delete');
     if (!authorized.ok) return authorized;
     const current = await this.repository.get(campaignId);
     if (current === undefined || current.deletedAt !== undefined)
       return err('not_found_or_forbidden');
-    const deleted = await this.repository.softDelete(campaignId, expectedVersion, userId);
+    const deleted = await this.repository.softDelete(
+      campaignId,
+      expectedVersion,
+      userId,
+      withinTransaction,
+    );
     if (!deleted.ok) return err(mapRepositoryError(deleted.error));
     await this.recordAudit('campaign.deleted', current, userId);
     return ok(undefined);

@@ -1,6 +1,6 @@
 # Task 02: Campaign PostgreSQL schema and owner invariant
 
-Status: pending. Depends on task 01 and feature 01 membership schema.
+Status: completed. Depends on task 01 and feature 01 membership schema.
 
 ## Scope
 

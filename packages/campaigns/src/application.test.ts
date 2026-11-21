@@ -10,7 +10,12 @@ import { InMemoryCampaignRepository } from './memory.ts';
 
 const userId = '22222222-2222-2222-2222-222222222222';
 
-function harness() {
+function harness(
+  overrides: {
+    audit?: AuditRecorder;
+    log?: { auditDegraded(action: string, campaignId: string): void };
+  } = {},
+) {
   const repository = new InMemoryCampaignRepository();
   const catalog: SystemCatalog = {
     list: async () => [FIXTURE_SYSTEM.summary],
@@ -32,9 +37,9 @@ function harness() {
       return handle.insertOwner(input);
     },
   };
-  const actor: ActorRef = { userId, campaignId: CAMPAIGN_INPUT.id, role: 'owner' };
+  let actor: ActorRef = { userId, campaignId: CAMPAIGN_INPUT.id, role: 'owner' };
   const audits: string[] = [];
-  const audit: AuditRecorder = {
+  const audit: AuditRecorder = overrides.audit ?? {
     record: async (event) => {
       audits.push(event.action);
     },
@@ -44,6 +49,12 @@ function harness() {
     namespace: 'feature.weather',
     schema: Type.Object({ enabled: Type.Boolean() }, { additionalProperties: false }),
     memberVisible: true,
+    writableRoles: ['owner'],
+  });
+  settings.register({
+    namespace: 'feature.secret',
+    schema: Type.Object({ enabled: Type.Boolean() }, { additionalProperties: false }),
+    memberVisible: false,
     writableRoles: ['owner'],
   });
   const service = new CampaignService(
@@ -59,13 +70,18 @@ function harness() {
     },
     ownerWriter,
     {
-      decide: (candidate, capability) => candidate.role === 'owner' || capability === 'read',
+      decide: (candidate, capability, _namespace, visibility) =>
+        (candidate.role === 'owner' || capability === 'read') &&
+        (visibility?.mode !== 'gm_only' || candidate.role === 'owner'),
     },
     settings,
     audit,
-    { auditDegraded: () => undefined },
+    overrides.log ?? { auditDegraded: () => undefined },
   );
-  return { service, repository, audits };
+  const actAs = (role: ActorRef['role']) => {
+    actor = { ...actor, role };
+  };
+  return { service, repository, audits, actAs };
 }
 
 describe('CampaignService', () => {
@@ -104,6 +120,56 @@ describe('CampaignService', () => {
     expect(setting.value.settings.system).toEqual({ tone: 'bright' });
   });
 
+  test('setting writes are versioned per namespace, not per campaign', async () => {
+    const { service } = harness();
+    const created = await service.create(userId, CAMPAIGN_INPUT);
+    if (!created.ok) throw new Error('fixture creation failed');
+    const write = (value: boolean, expectedVersion: number | null) =>
+      service.updateSetting(userId, CAMPAIGN_INPUT.id, 'feature.weather', {
+        value: { enabled: value },
+        expectedVersion,
+      });
+    expect(await write(true, 1)).toEqual({ ok: false, error: 'not_found_or_forbidden' });
+    expect((await write(true, null)).ok).toBe(true);
+    expect(await write(false, null)).toEqual({ ok: false, error: 'version_conflict' });
+    expect((await write(false, 1)).ok).toBe(true);
+    expect(await write(true, 1)).toEqual({ ok: false, error: 'version_conflict' });
+    expect(await service.getSetting(userId, CAMPAIGN_INPUT.id, 'feature.weather')).toEqual({
+      ok: true,
+      value: { value: { enabled: false }, version: 2 },
+    });
+    expect(await service.getSetting(userId, CAMPAIGN_INPUT.id, 'system')).toEqual({
+      ok: true,
+      value: { value: { tone: 'bright' }, version: 1 },
+    });
+  });
+
+  test('a setting that is not member-visible reads like a GM-only record', async () => {
+    const { service, actAs } = harness();
+    const created = await service.create(userId, CAMPAIGN_INPUT);
+    if (!created.ok) throw new Error('fixture creation failed');
+    for (const namespace of ['feature.secret', 'feature.weather']) {
+      const written = await service.updateSetting(userId, CAMPAIGN_INPUT.id, namespace, {
+        value: { enabled: true },
+        expectedVersion: null,
+      });
+      expect(written.ok).toBe(true);
+    }
+    const hidden = { ok: true as const, value: { value: { enabled: true }, version: 1 } };
+    expect(await service.getSetting(userId, CAMPAIGN_INPUT.id, 'feature.secret')).toEqual(hidden);
+    actAs('player');
+    expect(await service.getSetting(userId, CAMPAIGN_INPUT.id, 'feature.secret')).toEqual({
+      ok: false,
+      error: 'not_found_or_forbidden',
+    });
+    // Indistinguishable from a namespace that was never written.
+    expect(await service.getSetting(userId, CAMPAIGN_INPUT.id, 'feature.never')).toEqual({
+      ok: false,
+      error: 'not_found_or_forbidden',
+    });
+    expect(await service.getSetting(userId, CAMPAIGN_INPUT.id, 'feature.weather')).toEqual(hidden);
+  });
+
   test('only explicit expected-version update changes the exact pin', async () => {
     const { service } = harness();
     const created = await service.create(userId, CAMPAIGN_INPUT);
@@ -132,6 +198,42 @@ describe('CampaignService', () => {
     const current = await service.get(userId, CAMPAIGN_INPUT.id);
     if (!current.ok) return;
     expect(current.value.system.version).toBe('0.2.0');
+  });
+
+  test('audit records actor, previous and new pin, deletion; failure never blocks state', async () => {
+    const events: Array<{ action: string; actor: ActorRef; before?: unknown; after?: unknown }> =
+      [];
+    const degraded: string[] = [];
+    const { service } = harness({
+      audit: {
+        record: async (event) => {
+          events.push(event);
+          if (event.action === 'campaign.deleted') throw new Error('audit store down');
+        },
+      },
+      log: { auditDegraded: (action) => degraded.push(action) },
+    });
+    const created = await service.create(userId, CAMPAIGN_INPUT);
+    if (!created.ok) throw new Error('fixture creation failed');
+    // Keep current is the absence of a call: no event, pin unchanged.
+    expect(events.map((event) => event.action)).toEqual(['campaign.created']);
+    const updated = await service.updateSystem(userId, CAMPAIGN_INPUT.id, {
+      targetVersion: '0.2.0',
+      expectedVersion: created.value.version,
+    });
+    if (!updated.ok) throw new Error('update failed');
+    expect(events.at(-1)).toMatchObject({
+      action: 'campaign.system_updated',
+      actor: { userId, role: 'owner' },
+    });
+    expect(JSON.stringify(events.at(-1))).toContain('0.1.0');
+    expect(JSON.stringify(events.at(-1))).toContain('0.2.0');
+    expect(await service.delete(userId, CAMPAIGN_INPUT.id, updated.value.version)).toEqual({
+      ok: true,
+      value: undefined,
+    });
+    expect(degraded).toEqual(['campaign.deleted']);
+    expect(await service.list(userId)).toEqual([]);
   });
 
   test('tombstones remove list, read, and context', async () => {

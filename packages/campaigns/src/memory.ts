@@ -6,6 +6,8 @@ import type { CampaignDetailsUpdateInput, CampaignSettingUpdateInput } from './c
 export class InMemoryCampaignRepository implements CampaignRepository {
   readonly #campaigns = new Map<string, CampaignRecord>();
   readonly #memberships = new Map<string, Set<string>>();
+  readonly #settingVersions = new Map<string, number>();
+  readonly #settingVisibility = new Map<string, boolean>();
 
   async create(record: CampaignRecord, ownerWriter: CampaignMembershipWriter) {
     const current = this.#campaigns.get(record.id);
@@ -30,6 +32,9 @@ export class InMemoryCampaignRepository implements CampaignRepository {
     );
     if (!inserted.ok) return err<'owner_conflict'>('owner_conflict');
     this.#campaigns.set(record.id, structuredClone(record));
+    for (const namespace of Object.keys(record.settings)) {
+      this.#settingVersions.set(settingKey(record.id, namespace), 1);
+    }
     return ok({ record: structuredClone(record), created: true });
   }
 
@@ -58,16 +63,39 @@ export class InMemoryCampaignRepository implements CampaignRepository {
     namespace: string,
     input: CampaignSettingUpdateInput,
     _actorUserId: string,
-    _memberVisible: boolean,
+    memberVisible: boolean,
   ) {
     const current = this.#campaigns.get(campaignId);
     if (current === undefined || current.deletedAt !== undefined)
       return err<'not_found'>('not_found');
-    const expectedVersion = input.expectedVersion ?? current.version;
-    return this.update(campaignId, expectedVersion, (record) => ({
+    const key = settingKey(campaignId, namespace);
+    const settingVersion = this.#settingVersions.get(key);
+    if (settingVersion === undefined) {
+      if (input.expectedVersion !== null) return err<'not_found'>('not_found');
+    } else if (input.expectedVersion !== settingVersion) {
+      return err<'version_conflict'>('version_conflict');
+    }
+    const updated = await this.update(campaignId, current.version, (record) => ({
       ...record,
       settings: { ...record.settings, [namespace]: structuredClone(input.value) },
     }));
+    if (updated.ok) {
+      this.#settingVersions.set(key, (settingVersion ?? 0) + 1);
+      this.#settingVisibility.set(key, memberVisible);
+    }
+    return updated;
+  }
+
+  async getSetting(campaignId: string, namespace: string) {
+    const version = this.#settingVersions.get(settingKey(campaignId, namespace));
+    const campaign = this.#campaigns.get(campaignId);
+    if (version === undefined || campaign === undefined) return undefined;
+    return {
+      value: structuredClone(campaign.settings[namespace]),
+      version,
+      // Creation stores the system namespace member-visible, as the PostgreSQL repository does.
+      memberVisible: this.#settingVisibility.get(settingKey(campaignId, namespace)) ?? true,
+    };
   }
 
   async updateSystemPin(
@@ -107,6 +135,10 @@ export class InMemoryCampaignRepository implements CampaignRepository {
     this.#campaigns.set(campaignId, updated);
     return ok(structuredClone(updated));
   }
+}
+
+function settingKey(campaignId: string, namespace: string): string {
+  return `${campaignId}\u0000${namespace}`;
 }
 
 function sameAggregate(left: CampaignRecord, right: CampaignRecord): boolean {

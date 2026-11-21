@@ -3,7 +3,11 @@ import type { CampaignMembershipWriter, MembershipError } from '@rpg/identity';
 import { and, asc, eq, isNull, sql } from 'drizzle-orm';
 import { drizzle, type PostgresJsDatabase } from 'drizzle-orm/postgres-js';
 import postgres from 'postgres';
-import type { CampaignRecord, CampaignRepository } from '../../application.ts';
+import type {
+  CampaignRecord,
+  CampaignRepository,
+  CampaignTransactionParticipant,
+} from '../../application.ts';
 import type { CampaignDetailsUpdateInput, CampaignSettingUpdateInput } from '../../contracts.ts';
 import {
   campaignModulePins,
@@ -25,7 +29,11 @@ class OwnerFailure extends Error {
 export class PostgresCampaignRepository implements CampaignRepository {
   constructor(private readonly db: Database) {}
 
-  async create(record: CampaignRecord, ownerWriter: CampaignMembershipWriter) {
+  async create(
+    record: CampaignRecord,
+    ownerWriter: CampaignMembershipWriter,
+    withinTransaction?: CampaignTransactionParticipant,
+  ) {
     const existing = await this.get(record.id);
     if (existing !== undefined) {
       return sameAggregate(existing, record)
@@ -34,45 +42,8 @@ export class PostgresCampaignRepository implements CampaignRepository {
     }
     try {
       const created = await this.db.transaction(async (transaction) => {
-        const [campaign] = await transaction
-          .insert(campaigns)
-          .values({
-            id: record.id,
-            name: record.name,
-            description: record.description,
-            gameMode: record.gameMode,
-            createdBy: record.createdBy,
-          })
-          .returning();
-        if (campaign === undefined) throw new Error('campaign insert returned no row');
-        await transaction.insert(campaignSystemPins).values({
-          campaignId: record.id,
-          systemId: record.system.systemId,
-          systemVersion: record.system.version,
-        });
-        if (record.modulePins.length > 0) {
-          await transaction.insert(campaignModulePins).values(
-            record.modulePins.map((pin) => ({
-              campaignId: record.id,
-              moduleId: pin.moduleId,
-              moduleVersion: pin.version,
-            })),
-          );
-        }
-        for (const [namespace, value] of Object.entries(record.settings)) {
-          await transaction.insert(campaignSettings).values({
-            campaignId: record.id,
-            namespace,
-            value,
-            memberVisible: true,
-            updatedBy: record.createdBy,
-          });
-        }
-        const owner = await ownerWriter.createOwner(
-          { campaignId: record.id, userId: record.createdBy },
-          { handle: transaction },
-        );
-        if (!owner.ok) throw new OwnerFailure(owner.error);
+        await this.#insertAggregate(transaction, record, ownerWriter, () => true);
+        await withinTransaction?.(transaction);
         return this.load(record.id, transaction);
       });
       if (created === undefined) throw new Error('created campaign could not be loaded');
@@ -89,6 +60,67 @@ export class PostgresCampaignRepository implements CampaignRepository {
     }
   }
 
+  /**
+   * Feature 07 import: creates the campaign aggregate and its sole owner on a transaction the
+   * caller opened (`ImportTransaction`, resolved by the composition root). Nothing commits
+   * here; any failure throws so the caller's whole import rolls back.
+   */
+  async createWithin(
+    handle: unknown,
+    record: CampaignRecord,
+    ownerWriter: CampaignMembershipWriter,
+    memberVisible: (namespace: string) => boolean,
+  ): Promise<void> {
+    await this.#insertAggregate(handle as Transaction, record, ownerWriter, memberVisible);
+  }
+
+  async #insertAggregate(
+    transaction: Transaction,
+    record: CampaignRecord,
+    ownerWriter: CampaignMembershipWriter,
+    memberVisible: (namespace: string) => boolean,
+  ): Promise<void> {
+    const [campaign] = await transaction
+      .insert(campaigns)
+      .values({
+        id: record.id,
+        name: record.name,
+        description: record.description,
+        gameMode: record.gameMode,
+        createdBy: record.createdBy,
+      })
+      .returning();
+    if (campaign === undefined) throw new Error('campaign insert returned no row');
+    await transaction.insert(campaignSystemPins).values({
+      campaignId: record.id,
+      systemId: record.system.systemId,
+      systemVersion: record.system.version,
+    });
+    if (record.modulePins.length > 0) {
+      await transaction.insert(campaignModulePins).values(
+        record.modulePins.map((pin) => ({
+          campaignId: record.id,
+          moduleId: pin.moduleId,
+          moduleVersion: pin.version,
+        })),
+      );
+    }
+    for (const [namespace, value] of Object.entries(record.settings)) {
+      await transaction.insert(campaignSettings).values({
+        campaignId: record.id,
+        namespace,
+        value,
+        memberVisible: memberVisible(namespace),
+        updatedBy: record.createdBy,
+      });
+    }
+    const owner = await ownerWriter.createOwner(
+      { campaignId: record.id, userId: record.createdBy },
+      { handle: transaction },
+    );
+    if (!owner.ok) throw new OwnerFailure(owner.error);
+  }
+
   get(campaignId: string) {
     return this.load(campaignId, this.db);
   }
@@ -98,30 +130,60 @@ export class PostgresCampaignRepository implements CampaignRepository {
     return records.filter((record): record is CampaignRecord => record !== undefined);
   }
 
-  async updateDetails(campaignId: string, input: CampaignDetailsUpdateInput, _actorUserId: string) {
+  async updateDetails(
+    campaignId: string,
+    input: CampaignDetailsUpdateInput,
+    _actorUserId: string,
+    withinTransaction?: CampaignTransactionParticipant,
+  ) {
     try {
-      const changed = await this.db
-        .update(campaigns)
-        .set({
-          name: input.name.trim(),
-          description: input.description,
-          version: sql`${campaigns.version} + 1`,
-          updatedAt: sql`transaction_timestamp()`,
-        })
-        .where(
-          and(
-            eq(campaigns.id, campaignId),
-            eq(campaigns.version, input.expectedVersion),
-            isNull(campaigns.deletedAt),
-          ),
-        )
-        .returning({ id: campaigns.id });
-      if (changed.length === 0) return this.missingOrConflict(campaignId);
+      const changed = await this.db.transaction(async (transaction) => {
+        const rows = await transaction
+          .update(campaigns)
+          .set({
+            name: input.name.trim(),
+            description: input.description,
+            version: sql`${campaigns.version} + 1`,
+            updatedAt: sql`transaction_timestamp()`,
+          })
+          .where(
+            and(
+              eq(campaigns.id, campaignId),
+              eq(campaigns.version, input.expectedVersion),
+              isNull(campaigns.deletedAt),
+            ),
+          )
+          .returning({ id: campaigns.id });
+        if (rows.length > 0) await withinTransaction?.(transaction);
+        return rows.length > 0;
+      });
+      if (!changed) return this.missingOrConflict(campaignId);
       const record = await this.get(campaignId);
       return record === undefined ? err<'not_found'>('not_found') : ok(record);
     } catch {
       return err<'persistence_unavailable'>('persistence_unavailable');
     }
+  }
+
+  async getSetting(campaignId: string, namespace: string) {
+    const [row] = await this.db
+      .select({
+        value: campaignSettings.value,
+        version: campaignSettings.version,
+        memberVisible: campaignSettings.memberVisible,
+      })
+      .from(campaignSettings)
+      .where(
+        and(
+          eq(campaignSettings.campaignId, campaignId),
+          eq(campaignSettings.namespace, namespace),
+          isNull(campaignSettings.deletedAt),
+        ),
+      )
+      .limit(1);
+    return row === undefined
+      ? undefined
+      : { value: row.value as unknown, version: row.version, memberVisible: row.memberVisible };
   }
 
   async updateSetting(
@@ -130,6 +192,7 @@ export class PostgresCampaignRepository implements CampaignRepository {
     input: CampaignSettingUpdateInput,
     actorUserId: string,
     memberVisible: boolean,
+    withinTransaction?: CampaignTransactionParticipant,
   ) {
     try {
       const result = await this.db.transaction(async (transaction) => {
@@ -179,6 +242,7 @@ export class PostgresCampaignRepository implements CampaignRepository {
             updatedAt: sql`transaction_timestamp()`,
           })
           .where(and(eq(campaigns.id, campaignId), isNull(campaigns.deletedAt)));
+        await withinTransaction?.(transaction);
         return this.load(campaignId, transaction);
       });
       if (result === 'not_found' || result === 'version_conflict') return err(result);
@@ -224,24 +288,33 @@ export class PostgresCampaignRepository implements CampaignRepository {
     }
   }
 
-  async softDelete(campaignId: string, expectedVersion: number, _actorUserId: string) {
+  async softDelete(
+    campaignId: string,
+    expectedVersion: number,
+    _actorUserId: string,
+    withinTransaction?: CampaignTransactionParticipant,
+  ) {
     try {
-      const changed = await this.db
-        .update(campaigns)
-        .set({
-          deletedAt: sql`transaction_timestamp()`,
-          updatedAt: sql`transaction_timestamp()`,
-          version: sql`${campaigns.version} + 1`,
-        })
-        .where(
-          and(
-            eq(campaigns.id, campaignId),
-            eq(campaigns.version, expectedVersion),
-            isNull(campaigns.deletedAt),
-          ),
-        )
-        .returning({ id: campaigns.id });
-      if (changed.length === 0) return this.missingOrConflict(campaignId);
+      const changed = await this.db.transaction(async (transaction) => {
+        const rows = await transaction
+          .update(campaigns)
+          .set({
+            deletedAt: sql`transaction_timestamp()`,
+            updatedAt: sql`transaction_timestamp()`,
+            version: sql`${campaigns.version} + 1`,
+          })
+          .where(
+            and(
+              eq(campaigns.id, campaignId),
+              eq(campaigns.version, expectedVersion),
+              isNull(campaigns.deletedAt),
+            ),
+          )
+          .returning({ id: campaigns.id });
+        if (rows.length > 0) await withinTransaction?.(transaction);
+        return rows.length > 0;
+      });
+      if (!changed) return this.missingOrConflict(campaignId);
       return ok(undefined);
     } catch {
       return err<'persistence_unavailable'>('persistence_unavailable');
@@ -300,10 +373,34 @@ export class PostgresCampaignRepository implements CampaignRepository {
   }
 }
 
-function sameAggregate(left: CampaignRecord, right: CampaignRecord): boolean {
-  return (
-    JSON.stringify({ ...left, createdAt: '', updatedAt: '', version: 1 }) ===
-    JSON.stringify({ ...right, createdAt: '', updatedAt: '', version: 1 })
+/** Compares the submitted creation aggregate, independent of key order and jsonb normalization. */
+function sameAggregate(existing: CampaignRecord, submitted: CampaignRecord): boolean {
+  return JSON.stringify(creationShape(existing)) === JSON.stringify(creationShape(submitted));
+}
+
+function creationShape(record: CampaignRecord): unknown {
+  return canonical({
+    id: record.id,
+    name: record.name,
+    description: record.description,
+    gameMode: record.gameMode,
+    createdBy: record.createdBy,
+    system: record.system,
+    modulePins: [...record.modulePins].sort((left, right) =>
+      left.moduleId < right.moduleId ? -1 : left.moduleId > right.moduleId ? 1 : 0,
+    ),
+    settings: record.settings,
+    deletedAt: record.deletedAt ?? null,
+  });
+}
+
+function canonical(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(canonical);
+  if (value === null || typeof value !== 'object') return value;
+  return Object.fromEntries(
+    Object.entries(value)
+      .sort(([left], [right]) => (left < right ? -1 : left > right ? 1 : 0))
+      .map(([key, entry]) => [key, canonical(entry)]),
   );
 }
 

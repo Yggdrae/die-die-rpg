@@ -4,14 +4,18 @@
   "private": true,
   "type": "module",
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./export": "./src/export.ts",
+    "./policy": "./src/policy.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@rpg/authorization": "workspace:*",
     "@rpg/contracts": "workspace:*",
     "@rpg/identity": "workspace:*",
+    "@rpg/systems": "workspace:*",
     "@sinclair/typebox": "^0.34.48",
     "drizzle-orm": "^0.45.2",
     "postgres": "^3.4.9"

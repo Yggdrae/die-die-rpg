@@ -1,3 +1,4 @@
+import { GM_ROLES } from '@rpg/contracts';
 import { Value } from '@sinclair/typebox/value';
 import type {
   CampaignCreateInput,
@@ -106,6 +107,14 @@ export class CampaignSettingRegistry {
     }
     if (this.#registrations.has(registration.namespace)) {
       throw new Error(`Duplicate setting namespace: ${registration.namespace}`);
+    }
+    // A hidden setting replicates to GM roles only (sync `campaign_settings` stream), so only
+    // they may write it: a writer must be able to read what it wrote.
+    if (
+      !registration.memberVisible &&
+      registration.writableRoles.some((role) => !GM_ROLES.includes(role))
+    ) {
+      throw new Error(`Hidden setting writable beyond GM roles: ${registration.namespace}`);
     }
     this.#registrations.set(registration.namespace, registration);
   }

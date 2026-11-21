@@ -74,7 +74,7 @@ module engine.
 | `campaign_id uuid` | restricted FK to `campaigns` |
 | `namespace text` | package-style stable owner key, 1–100 ASCII characters |
 | `value jsonb` | validated by registered namespace schema |
-| `member_visible boolean` | controls audit redaction and sync declaration |
+| `member_visible boolean` | controls audit redaction, sync declaration, and authority reads (false reads as `gm_only`; only GM roles may be declared writable) |
 | `version bigint` | starts at 1; required expected-version writes |
 | `updated_at timestamptz` | required |
 | `updated_by uuid` | authoritative actor user ID |

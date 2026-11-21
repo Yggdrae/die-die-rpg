@@ -90,4 +90,29 @@ describe('manifest-driven campaign rules', () => {
     expect(registry.validate('feature.weather', { enabled: 'yes' })).toBe('invalid_setting');
     expect(registry.validate('feature.weather', { enabled: true })).toBeUndefined();
   });
+
+  test('setting registry rejects a hidden setting writable beyond GM roles', () => {
+    const registry = new CampaignSettingRegistry();
+    const schema = Type.Object({ enabled: Type.Boolean() }, { additionalProperties: false });
+    let failure: unknown;
+    try {
+      registry.register({
+        namespace: 'feature.hidden',
+        schema,
+        memberVisible: false,
+        writableRoles: ['owner', 'player'],
+      });
+    } catch (error) {
+      failure = error;
+    }
+    expect(String(failure)).toContain('Hidden setting writable beyond GM roles');
+    expect(registry.get('feature.hidden')).toBeUndefined();
+    registry.register({
+      namespace: 'feature.hidden',
+      schema,
+      memberVisible: false,
+      writableRoles: ['owner', 'gm', 'assistant_gm'],
+    });
+    expect(registry.get('feature.hidden')?.memberVisible).toBe(false);
+  });
 });

@@ -1,96 +1,25 @@
 import { Id, SystemRef, Timestamp, Version } from '@rpg/contracts';
+import {
+  GameModeDeclaration,
+  IntegrationStatus,
+  ModuleDeclaration,
+  SystemDefinition,
+  SystemOptionDeclaration,
+  SystemSummary,
+} from '@rpg/systems';
 import { type Static, type TSchema, Type } from '@sinclair/typebox';
 
 const Identifier = Type.String({ minLength: 1, maxLength: 100, pattern: '^[a-z0-9][a-z0-9._-]*$' });
 
-export const IntegrationStatus = Type.Object(
-  {
-    mechanicsSupported: Type.Boolean(),
-    characterSheetSupported: Type.Boolean(),
-    rulesTextIntegrated: Type.Boolean(),
-    compendiumIntegrated: Type.Boolean(),
-    externalDocumentation: Type.Optional(Type.String({ minLength: 1, maxLength: 2048 })),
-  },
-  { additionalProperties: false },
-);
-
-export const SystemSummary = Type.Object(
-  {
-    ref: SystemRef,
-    name: Type.String({ minLength: 1, maxLength: 120 }),
-    shortDescription: Type.String({ minLength: 1, maxLength: 500 }),
-    complexity: Type.Union([Type.Literal('low'), Type.Literal('medium'), Type.Literal('high')]),
-    documentationStatus: Type.Union([
-      Type.Literal('integrated'),
-      Type.Literal('external'),
-      Type.Literal('unavailable'),
-    ]),
-    rulesEntryPoint: Type.String({ minLength: 1, maxLength: 2048 }),
-    integration: IntegrationStatus,
-  },
-  { additionalProperties: false, $id: 'CampaignSystemSummary' },
-);
-export type SystemSummary = Static<typeof SystemSummary>;
-
-export const GameModeDeclaration = Type.Object(
-  { id: Identifier, label: Type.String({ minLength: 1, maxLength: 120 }) },
-  { additionalProperties: false },
-);
-export type GameModeDeclaration = Static<typeof GameModeDeclaration>;
-
-const StringOption = Type.Object(
-  {
-    key: Identifier,
-    label: Type.String({ minLength: 1, maxLength: 120 }),
-    type: Type.Literal('string'),
-    default: Type.String(),
-    minLength: Type.Optional(Type.Integer({ minimum: 0 })),
-    maxLength: Type.Optional(Type.Integer({ minimum: 1 })),
-  },
-  { additionalProperties: false },
-);
-const BooleanOption = Type.Object(
-  {
-    key: Identifier,
-    label: Type.String({ minLength: 1, maxLength: 120 }),
-    type: Type.Literal('boolean'),
-    default: Type.Boolean(),
-  },
-  { additionalProperties: false },
-);
-const SelectOption = Type.Object(
-  {
-    key: Identifier,
-    label: Type.String({ minLength: 1, maxLength: 120 }),
-    type: Type.Literal('select'),
-    default: Type.String(),
-    values: Type.Array(Type.String(), { minItems: 1, uniqueItems: true }),
-  },
-  { additionalProperties: false },
-);
-export const SystemOptionDeclaration = Type.Union([StringOption, BooleanOption, SelectOption]);
-export type SystemOptionDeclaration = Static<typeof SystemOptionDeclaration>;
-
-export const ModuleDeclaration = Type.Object(
-  {
-    id: Identifier,
-    version: Type.String({ minLength: 1, pattern: '^\\d+\\.\\d+\\.\\d+$' }),
-    name: Type.String({ minLength: 1, maxLength: 120 }),
-  },
-  { additionalProperties: false },
-);
-export type ModuleDeclaration = Static<typeof ModuleDeclaration>;
-
-export const SystemDefinition = Type.Object(
-  {
-    summary: SystemSummary,
-    gameModes: Type.Array(GameModeDeclaration, { minItems: 1 }),
-    options: Type.Array(SystemOptionDeclaration),
-    compatibleModules: Type.Array(ModuleDeclaration),
-  },
-  { additionalProperties: false, $id: 'CampaignSystemDefinition' },
-);
-export type SystemDefinition = Static<typeof SystemDefinition>;
+// Feature 08 owns these; re-exported so feature 02's consumers keep one import.
+export {
+  GameModeDeclaration,
+  IntegrationStatus,
+  ModuleDeclaration,
+  SystemDefinition,
+  SystemOptionDeclaration,
+  SystemSummary,
+};
 
 export const CampaignSettingValue = Type.Unknown();
 
