@@ -1,0 +1,28 @@
+{
+  "name": "@rpg/actions",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./engine": "./src/engine/index.ts",
+    "./postgres": "./src/postgres.ts",
+    "./testing": "./src/testing/target-contract.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@rpg/authorization": "workspace:*",
+    "@rpg/contracts": "workspace:*",
+    "@rpg/dice": "workspace:*",
+    "@rpg/formula": "workspace:*",
+    "@rpg/systems": "workspace:*",
+    "@sinclair/typebox": "^0.34.48",
+    "drizzle-orm": "^0.45.2",
+    "postgres": "^3.4.9"
+  },
+  "devDependencies": {
+    "@rpg/config": "workspace:*"
+  }
+}
