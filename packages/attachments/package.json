@@ -1,0 +1,28 @@
+{
+  "name": "@rpg/attachments",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./export": "./src/export.ts",
+    "./policy": "./src/policy.ts",
+    "./offline": "./src/offline.ts",
+    "./postgres": "./src/postgres.ts",
+    "./s3": "./src/s3.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@rpg/audit": "workspace:*",
+    "@rpg/authorization": "workspace:*",
+    "@rpg/contracts": "workspace:*",
+    "@sinclair/typebox": "^0.34.48",
+    "drizzle-orm": "^0.45.2",
+    "postgres": "^3.4.9"
+  },
+  "devDependencies": {
+    "@rpg/config": "workspace:*"
+  }
+}

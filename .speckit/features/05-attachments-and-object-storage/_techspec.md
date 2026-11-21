@@ -4,11 +4,42 @@ Source: `_prd.md`, `_bdd.md`, `_db.md`, feature 00 spike findings, and features 
 
 ## Current Facts
 
-- `AttachmentRef` and offline-state contracts exist. MinIO is declared in `compose.yaml` but the
-  file notes the stack is not fully verified.
-- There is no attachment package, bucket provisioning, S3 client, upload route, safe viewer, local
-  byte cache, or reconciliation worker.
-- The PWA must remain cross-origin isolated for feature 03.
+- `AttachmentRef` and offline-state contracts exist.
+- Tasks 01–04 (2026-10-27): `packages/attachments` (port, `Bun.S3Client` adapter, policy,
+  PostgreSQL metadata `0008_attachment_metadata`, service, abandoned-upload cleanup), API routes in
+  `apps/api/src/modules/attachments/`, safe viewers in `apps/web/src/features/attachments/`, and
+  the `minio-bucket` compose one-shot (private bucket, least-privilege signing user, CORS
+  allowlist) exist and are verified against MinIO. See `tasks/task_01.md` for what a grant binds.
+- Tasks 05–07 (2026-10-27): `OfflineAttachmentStore` (`@rpg/attachments/offline`) over an
+  IndexedDB record/byte store, the campaign offline set route
+  (`GET .../attachments/offline-estimate`), versioned deletion (`DELETE .../attachments/:id`,
+  `attachment.deleted`), `AttachmentReconciler` (deleted-campaign cascade, 30-day purge, orphan
+  and missing-object diagnostics), and `AttachmentManifestExporter`. Security and acceptance suite
+  in `tasks/task_07.md`, including the normal-connection reference profile.
+- Decision (task 05): attachment metadata does not replicate through PowerSync. Its read rule
+  needs the owner's decision, a join to a per-record owner table that PowerSync 1.25.0 cannot
+  enforce (joined-row equality ignored, 1000-parameter limit on unkeyed joins); the `attachments`
+  table stays out of the publication. The device learns metadata from the authorized offline set,
+  keeps it only beside bytes it was allowed to fetch, and drops both on the removal signals
+  (feature 03 replica purge, absence from the offline set, a denied read).
+- Amended (feature 07 task 05, 2026-10-31, delegated by the owner): the decision above still holds
+  for reading attachments. Separately, `ready` metadata (never `object_key`) now streams to the
+  `export` holders only (`campaign_export_metadata`, `owner` and `gm`), who read every owner class
+  (feature 16 D-15), so no per-attachment rule applies. A future owner class private from a GM must
+  revisit that stream.
+- Clock skew (2026-10-30): a grant is signed with the API host's clock and judged by the provider's.
+  A provider ahead by T shortens a grant to its lifetime minus T (read 300 s, upload 600 s; useless
+  at T >= lifetime); a provider behind by T lengthens it by T, also after a revocation. Normal time
+  synchronization makes this negligible, so no code compensates: deployments must keep the API and
+  the store time-synchronized. The local WSL VM clock moved between 1.3 s and 4.3 s ahead of Windows (it
+  falls behind, then jumps about 2.9 s forward every 35 s), which broke a test using a 3 s URL; that
+  test now reads every instant from the provider's `Date` header.
+- Production owner class (feature 16 task 13, 2026-10-29): `apps/api/src/main.ts` passes
+  `ownerClasses: CONTENT_ATTACHMENT_OWNER_CLASSES` (= `['campaign_entity']`, from `@rpg/content`);
+  personal notes and relationships are not owner classes (D-15). Entity detail mounts
+  `AttachmentList` and an upload over `uploadAttachment` with the entity's current Visibility.
+- Not yet: feature 07 (nothing registers the exporter or retained job references), as before.
+- The PWA must remain cross-origin isolated for feature 03 (verified with attachment images).
 
 ## Proposed Architecture
 
@@ -109,6 +140,6 @@ No WebSocket layer is required. Progress is local transfer state.
 - Pending uploads expire after 24 hours; deleted ready bytes retain 30 days.
 - Signed upload/read URLs live 10/5 minutes respectively.
 - Actual content signature is verified.
-- Blocking: prove the chosen S3 client/presigner under Bun and verify MinIO/COOP/COEP behavior
-  before implementing routes.
+- Resolved (task 01): `Bun.S3Client` under Bun 1.3.14, no SDK dependency; MinIO/COOP/COEP behavior
+  verified (images via CORS `crossorigin`, PDFs top-level on the storage origin, never framed).
 

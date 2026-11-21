@@ -112,11 +112,30 @@ Visibility narrowing or membership revocation aborts an in-progress download and
 pinned bytes when the revocation signal is processed. A device offline at revocation may retain
 bytes until reconnect; server URLs and writes already fail closed. Sign-out deletes all local bytes.
 
+Implemented (task 05, 2026-10-27): the local state is an IndexedDB object store beside the bytes
+(`rpg-attachments-<userId>`, stores `records` and `bytes`), not a table in the replica's SQLite, so
+a verified download and its state commit in one transaction and the store is purged through
+feature 03's `ReplicaPurgeListener` (the contract for local state outside the replica). Each record
+also carries the metadata needed to open offline (owner, filename, MIME, version), because metadata
+does not replicate (next section). `unavailable` is derived (no local bytes and no network), not
+stored; `local_key` is the attachment ID.
+
 ## Sync and Conflicts
 
 Only ready/tombstoned metadata synchronizes through feature 03. Pending upload rows and signed URLs
 never do. Visibility filters apply before metadata (including filename) leaves the authority.
 Binary download is a separate authorized operation.
+
+Implemented (task 05): no attachment metadata replicates today. Its read rule is the owner's
+decision narrowed by the attachment's Visibility, which needs a join to a per-record owner table;
+PowerSync 1.25.0 ignores equality between a joined row and the source row and fails on unkeyed
+joins past 1000 parameter results (`docs/OFFLINE_SYNC_RUNTIME.md`), and no production owner class
+exists. The `attachments` table is therefore in no publication and unreadable by
+`powersync_replicator`. A device obtains metadata only from the authorized offline set
+(`GET .../attachments/offline-estimate`), and reconciles it on observed synchronization: an
+attachment absent from the set (narrowed, deleted) loses metadata and bytes; a 404 purges the
+campaign. Because no replica holds attachment tombstones, the feature 03 watermark purge gate is
+vacuous until metadata replicates.
 
 Attachment metadata updates and deletes use expected version. Bytes are immutable after finalization;
 replacing a file creates a new attachment and tombstones the old one. This avoids binary merge and
