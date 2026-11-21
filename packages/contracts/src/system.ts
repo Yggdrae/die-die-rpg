@@ -26,16 +26,33 @@ export function systemRefToString(ref: SystemRef): string {
  * ask `system.capabilities`, never which system this is. A branch on a system identifier
  * fails the architecture guard.
  *
- * Feature 08 owns the closed registry of values. Wave 0 ships only the branded type so
- * consumers compile; the union is filled in wave 1 once both MVP packages are drafted.
- * A capability named after a system, or one with exactly one plausible user, is a system
- * conditional wearing a different name.
+ * Feature 08 owns this closed registry. A capability named after a system, or one with exactly
+ * one plausible user, is a system conditional wearing a different name. Adding a key is a contract
+ * change on purpose: that friction is what stops keys from becoming system names.
  */
-declare const CapabilityKeyBrand: unique symbol;
-export type CapabilityKey = string & { readonly [CapabilityKeyBrand]: true };
+export const CAPABILITY_KEYS = {
+  character_sheet: 'Characters render from the declared character schema.',
+  dice_rolls: 'Declared actions roll dice.',
+  resource_pools: 'Some resources are numeric pools with a current value and bounds.',
+  resource_tracks: 'Some resources are tracks of separately marked boxes.',
+  spendable_points: 'Some resource is spent as a currency rather than lost as harm.',
+  conditions: 'Characters can carry named conditions.',
+  inventory_slots: 'Inventory is measured in slots against a capacity.',
+  rating_ladders: 'Some values read on a named rating scale.',
+  freeform_entries: 'Characters hold free-text entries of a declared kind.',
+  outcome_choices: 'Some action outcomes are offered to the table instead of applied.',
+  integrated_rules: 'Rules text ships inside the application.',
+  compendium: 'The package declares compendiums.',
+  turn_order: 'Encounters track whose turn it is.',
+} as const;
 
-export const CapabilityKeySchema = Type.String({ minLength: 1, $id: 'CapabilityKey' });
+export type CapabilityKey = keyof typeof CAPABILITY_KEYS;
 
-export function capabilityKey(value: string): CapabilityKey {
-  return value as CapabilityKey;
+export const CapabilityKeySchema = Type.Union(
+  (Object.keys(CAPABILITY_KEYS) as CapabilityKey[]).map((key) => Type.Literal(key)),
+  { $id: 'CapabilityKey' },
+);
+
+export function isCapabilityKey(value: string): value is CapabilityKey {
+  return Object.hasOwn(CAPABILITY_KEYS, value);
 }

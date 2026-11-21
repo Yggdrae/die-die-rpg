@@ -11,7 +11,8 @@
   },
   "dependencies": {
     "@rpg/campaigns": "workspace:*",
-    "@rpg/contracts": "workspace:*"
+    "@rpg/contracts": "workspace:*",
+    "@rpg/systems": "workspace:*"
   },
   "devDependencies": {
     "@rpg/config": "workspace:*"

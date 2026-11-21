@@ -1,9 +1,17 @@
 import { describe, expect, test } from 'bun:test';
 import { ActorRef, check, EntityEnvelope, Id, issues, SystemRef } from '@rpg/contracts';
 
-import { ACTORS, FIXTURE_CAMPAIGN, FIXTURE_ENTITIES, FIXTURE_SYSTEM } from './campaign.ts';
+import { runConformance } from '@rpg/systems/testing';
+import {
+  ACTORS,
+  FIXTURE_CAMPAIGN,
+  FIXTURE_ENTITIES,
+  FIXTURE_SYSTEM,
+  FIXTURE_SYSTEM_DEFINITION,
+} from './campaign.ts';
 import { FIXTURE_CHARACTER_SCHEMA } from './character-schema.ts';
 import { CAMPAIGN_ID } from './ids.ts';
+import { FIXTURE_SYSTEM_PACKAGE } from './system-package.ts';
 
 /**
  * A fixture that does not validate is worse than no fixture: features build against it and
@@ -132,8 +140,38 @@ describe('fixture character schema', () => {
   test('every computed field declares a formula', () => {
     for (const field of FIXTURE_CHARACTER_SCHEMA.fields) {
       if (field.type === 'computed') {
-        expect(field.formula).toBeDefined();
+        expect(field.value.formula.length).toBeGreaterThan(0);
       }
     }
+  });
+});
+
+describe('fixture system package', () => {
+  test('passes the conformance kit', () => {
+    const report = runConformance(FIXTURE_SYSTEM_PACKAGE);
+    expect(report.checks.filter((check) => !check.passed)).toEqual([]);
+  });
+
+  test('the derived definition is exactly what campaigns were pinned against', () => {
+    expect(FIXTURE_SYSTEM_DEFINITION).toEqual({
+      summary: {
+        ref: { systemId: 'fixture-system', version: '0.1.0' },
+        name: 'Fixture System',
+        shortDescription: 'A generic test system with no product-specific behavior.',
+        complexity: 'medium',
+        documentationStatus: 'integrated',
+        rulesEntryPoint: 'https://example.invalid/fixture-rules',
+        integration: {
+          mechanicsSupported: true,
+          characterSheetSupported: true,
+          rulesTextIntegrated: true,
+          compendiumIntegrated: false,
+          externalDocumentation: 'https://example.invalid/fixture-rules',
+        },
+      },
+      gameModes: [{ id: 'standard', label: 'Standard' }],
+      options: [],
+      compatibleModules: [],
+    });
   });
 });
