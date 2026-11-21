@@ -9,3 +9,5 @@
 export * from './campaign.ts';
 export * from './character-schema.ts';
 export * from './ids.ts';
+export * from './rules.ts';
+export { FIXTURE_SYSTEM_PACKAGE } from './system-package.ts';
