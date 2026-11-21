@@ -1,4 +1,5 @@
 import { type Static, Type } from '@sinclair/typebox';
+import { Value } from '@sinclair/typebox/value';
 
 const Id = Type.String({
   pattern: '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$',
@@ -16,6 +17,62 @@ export const MutationOperationSchema = Type.Union([
   Type.Literal('resolution'),
 ]);
 
+/** Mirrors `@rpg/audit` MAX_AUDIT_VALUE_BYTES; pinned by an apps/api composition test. */
+export const MUTATION_AUDIT_VALUE_LIMIT_BYTES = 16_384;
+
+const AuditMetadata = Type.Record(Type.String(), Type.Unknown());
+
+/**
+ * Audit payload that travels with an uploaded mutation (feature 06 TechSpec, Recording Contract
+ * Adaptation): the frozen `AuditEvent` without its identifier. The identifier is derived from the
+ * mutation ID at the authority, and `actor` is advisory only: the authority replaces it with the
+ * actor it resolved from the authenticated session (`ActorRef` is never client-supplied).
+ */
+export const MutationAuditSchema = Type.Object(
+  {
+    campaignId: Id,
+    sessionId: Type.Optional(Id),
+    actor: Type.Optional(
+      Type.Object(
+        {
+          userId: Id,
+          campaignId: Id,
+          role: Type.Union([
+            Type.Literal('owner'),
+            Type.Literal('gm'),
+            Type.Literal('assistant_gm'),
+            Type.Literal('player'),
+            Type.Literal('observer'),
+          ]),
+        },
+        { additionalProperties: false },
+      ),
+    ),
+    action: Type.String({ minLength: 1, maxLength: 128 }),
+    targetType: Type.String({ minLength: 1, maxLength: 128 }),
+    targetId: Id,
+    before: Type.Optional(AuditMetadata),
+    after: Type.Optional(AuditMetadata),
+    at: Timestamp,
+    private: Type.Boolean(),
+  },
+  { additionalProperties: false },
+);
+export type MutationAuditPayload = Static<typeof MutationAuditSchema>;
+
+/** Schema plus the serialized before/after bound; the single local and wire validity rule. */
+export function isValidMutationAudit(value: unknown): value is MutationAuditPayload {
+  if (!Value.Check(MutationAuditSchema, value)) return false;
+  try {
+    const size =
+      (value.before === undefined ? 0 : JSON.stringify(value.before).length) +
+      (value.after === undefined ? 0 : JSON.stringify(value.after).length);
+    return size <= MUTATION_AUDIT_VALUE_LIMIT_BYTES;
+  } catch {
+    return false;
+  }
+}
+
 export const PendingMutationSchema = Type.Object(
   {
     mutationId: Id,
@@ -26,6 +83,8 @@ export const PendingMutationSchema = Type.Object(
     operation: MutationOperationSchema,
     expectedVersion: Type.Union([Version, Type.Null()]),
     payload: Type.Unknown(),
+    /** Optional so older clients stay valid; without it the authority audits through the domain service. */
+    audit: Type.Optional(MutationAuditSchema),
     causalSequence: Type.Integer({ minimum: 1 }),
     state: Type.Union([Type.Literal('pending'), Type.Literal('uploading')]),
     attemptCount: Type.Integer({ minimum: 0 }),
@@ -93,12 +152,57 @@ export const SyncBootstrapResponse = Type.Object(
   { additionalProperties: false },
 );
 
+/**
+ * A replica acknowledges a sequence it observed in `tableName`. Audit tables are excluded: their
+ * replicas never see an authority sequence (gaps would count hidden events), so they acknowledge
+ * through `AuditWatermarkAcknowledgement` instead.
+ */
 export const WatermarkAcknowledgement = Type.Object(
   {
     replicaId: Id,
-    tableName: Type.String({ minLength: 1, maxLength: 100, pattern: '^[a-z][a-z0-9_]*$' }),
+    tableName: Type.String({
+      minLength: 1,
+      maxLength: 100,
+      pattern: '^(?!audit_)[a-z][a-z0-9_]*$',
+    }),
     sequence: Type.Integer({ minimum: 0 }),
+    /** Records in `tableName` still referenced by this replica's unfinished local work. */
+    pendingRecordIds: Type.Optional(Type.Array(Id, { maxItems: 1000, uniqueItems: true })),
   },
+  { additionalProperties: false },
+);
+export type WatermarkAcknowledgement = Static<typeof WatermarkAcknowledgement>;
+
+/** Watermark scopes of the two replicated audit stores (feature 06 streams). */
+export const AUDIT_WATERMARK_SCOPES = ['audit_campaign_events', 'audit_private_events'] as const;
+export type AuditWatermarkScope = (typeof AUDIT_WATERMARK_SCOPES)[number];
+
+/**
+ * Feature 06 audit acknowledgement: the replica names the newest accepted event it durably holds
+ * in that store (or nothing it holds is older than what it dropped by compaction). The authority
+ * resolves the event to its sequence only if this replica's user may read it; the sequence never
+ * leaves the server.
+ */
+export const AuditWatermarkAcknowledgement = Type.Object(
+  {
+    replicaId: Id,
+    tableName: Type.Union([
+      Type.Literal('audit_campaign_events'),
+      Type.Literal('audit_private_events'),
+    ]),
+    throughEventId: Id,
+  },
+  { additionalProperties: false },
+);
+export type AuditWatermarkAcknowledgement = Static<typeof AuditWatermarkAcknowledgement>;
+
+export const ReplicaAcknowledgementBody = Type.Union([
+  WatermarkAcknowledgement,
+  AuditWatermarkAcknowledgement,
+]);
+
+export const SyncBootstrapQuery = Type.Object(
+  { replicaId: Type.Optional(Id) },
   { additionalProperties: false },
 );
 

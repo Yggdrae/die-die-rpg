@@ -9,6 +9,22 @@ export interface LongTextHoldRepository {
     expectedVersion: number | null,
     hold: LongTextHold | undefined,
   ): Promise<boolean>;
+  /**
+   * Reads the hold inside the caller's open transaction (an opaque handle, as for
+   * `MutationAuditHook`) and keeps the row locked until that transaction ends, so no takeover,
+   * renewal or release can commit between the check and the guarded write.
+   */
+  lockWithin(
+    transaction: unknown,
+    field: LongTextFieldRef,
+  ): Promise<LockedLongTextHold | undefined>;
+}
+
+/** The fields the write check needs; `live` is decided by the database clock. */
+export interface LockedLongTextHold {
+  readonly holderSessionId: string;
+  readonly version: number;
+  readonly live: boolean;
 }
 
 export class InMemoryLongTextHoldRepository implements LongTextHoldRepository {
@@ -36,6 +52,20 @@ export class InMemoryLongTextHoldRepository implements LongTextHoldRepository {
     if (hold === undefined) this.#holds.delete(key);
     else this.#holds.set(key, structuredClone(hold));
     return true;
+  }
+
+  async lockWithin(
+    _transaction: unknown,
+    field: LongTextFieldRef,
+  ): Promise<LockedLongTextHold | undefined> {
+    const hold = this.#holds.get(fieldKey(field));
+    return hold === undefined
+      ? undefined
+      : {
+          holderSessionId: hold.holderSessionId,
+          version: hold.version,
+          live: Date.parse(hold.expiresAt) > this.now().getTime(),
+        };
   }
 }
 
@@ -144,18 +174,26 @@ export class LongTextHoldService {
     return released;
   }
 
-  async mayWrite(input: {
-    readonly field: LongTextFieldRef;
-    readonly holderSessionId: string;
-    readonly expectedVersion: number;
-  }): Promise<boolean> {
-    const now = await this.repository.databaseNow();
-    const current = await this.repository.get(input.field);
+  /**
+   * The single-writer check, inside the transaction that writes the text. The hold row stays
+   * locked until that transaction ends: a takeover either committed first (this answers `false`)
+   * or waits for the write to commit. Lock order: hold row first, then the content row; nothing
+   * locks them the other way round, and hold writes lock only their own row.
+   */
+  async mayWriteWithin(
+    transaction: unknown,
+    input: {
+      readonly field: LongTextFieldRef;
+      readonly holderSessionId: string;
+      readonly expectedVersion: number;
+    },
+  ): Promise<boolean> {
+    const current = await this.repository.lockWithin(transaction, input.field);
     return (
       current !== undefined &&
       current.holderSessionId === input.holderSessionId &&
       current.version === input.expectedVersion &&
-      Date.parse(current.expiresAt) > now.getTime()
+      current.live
     );
   }
 }

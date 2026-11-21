@@ -8,6 +8,7 @@ import {
   type Result,
 } from '@rpg/contracts';
 import {
+  type CachedMembership,
   type ConflictResolutionChoice,
   type ConflictResolutionResult,
   type LocalMutationInput,
@@ -16,12 +17,22 @@ import {
   type PendingMutation,
   SYNC_BOOKKEEPING_LIMIT_BYTES,
 } from './model.ts';
-import { LOCAL_SCHEMA_SQL, LOCAL_SCHEMA_VERSION } from './sql-schema.ts';
+import { isValidMutationAudit, type MutationAuditPayload } from './schemas.ts';
+import { LOCAL_MIGRATIONS } from './sql-schema.ts';
 
 interface RecordRow {
   readonly payload: string;
   readonly version: number;
   readonly deleted_at: string | null;
+}
+
+interface MembershipRow {
+  readonly campaign_id: string;
+  readonly user_id: string;
+  readonly role: CachedMembership['role'];
+  readonly version: number;
+  readonly updated_at: string;
+  readonly removed_at: string | null;
 }
 
 interface CountRow {
@@ -45,6 +56,7 @@ interface MutationRow {
   readonly state: PendingMutation['state'];
   readonly attempt_count: number;
   readonly recorded_at: string;
+  readonly audit_payload?: string | null;
 }
 
 interface ConflictRow {
@@ -83,7 +95,13 @@ export class SqliteReplicaStore {
   }
 
   migrate(afterSchema?: (database: Database) => void): void {
-    this.applyMigration(LOCAL_SCHEMA_VERSION, LOCAL_SCHEMA_SQL, afterSchema);
+    LOCAL_MIGRATIONS.forEach((sql, index) => {
+      this.applyMigration(
+        index + 1,
+        sql,
+        index === LOCAL_MIGRATIONS.length - 1 ? afterSchema : undefined,
+      );
+    });
   }
 
   applyMigration(version: number, sql: string, afterSchema?: (database: Database) => void): void {
@@ -143,6 +161,8 @@ export class SqliteReplicaStore {
     input: LocalMutationInput<T>,
   ): Result<LocalWriteResult<T>, RepositoryError> {
     const operation = this.#db.transaction(() => {
+      if (this.accessRevoked(input.value.campaignId)) return err(ACCESS_REVOKED);
+      if (!isValidMutationAudit(input.audit)) return err(INVALID_AUDIT);
       const current = this.#record(input.tableName, input.value.id);
       if (current === null && input.expectedVersion !== null) {
         return err({ kind: 'not_found' as const, id: input.value.id });
@@ -215,11 +235,13 @@ export class SqliteReplicaStore {
     readonly expectedVersion: number;
     readonly mutationId: string;
     readonly recordedAt: string;
-    readonly audit: unknown;
+    readonly audit: MutationAuditPayload;
   }): Result<{ readonly pendingCount: number }, RepositoryError> {
     const operation = this.#db.transaction(() => {
       const current = this.#record(input.tableName, input.id);
       if (current === null) return err({ kind: 'not_found' as const, id: input.id });
+      if (!isValidMutationAudit(input.audit)) return err(INVALID_AUDIT);
+      if (this.accessRevoked(parseJson<T>(current.payload).campaignId)) return err(ACCESS_REVOKED);
       if (current.version !== input.expectedVersion) {
         return err({
           kind: 'version_conflict' as const,
@@ -274,11 +296,15 @@ export class SqliteReplicaStore {
   pending(campaignId: string, limit = 100): PendingMutation[] {
     return this.#db
       .query<MutationRow, [string, number]>(
-        `SELECT mutation_id, campaign_id, feature_id, table_name, record_id, operation,
-                expected_version, payload, causal_sequence, state, attempt_count, recorded_at
-         FROM sync_pending_mutations
-         WHERE campaign_id = ? AND state IN ('pending','uploading')
-         ORDER BY causal_sequence LIMIT ?`,
+        `SELECT mutation.mutation_id, mutation.campaign_id, mutation.feature_id,
+                mutation.table_name, mutation.record_id, mutation.operation,
+                mutation.expected_version, mutation.payload, mutation.causal_sequence,
+                mutation.state, mutation.attempt_count, mutation.recorded_at,
+                audit.payload AS audit_payload
+         FROM sync_pending_mutations AS mutation
+         LEFT JOIN sync_audit_envelopes AS audit ON audit.mutation_id = mutation.mutation_id
+         WHERE mutation.campaign_id = ? AND mutation.state IN ('pending','uploading')
+         ORDER BY mutation.causal_sequence LIMIT ?`,
       )
       .all(campaignId, limit)
       .map(toMutation);
@@ -492,16 +518,17 @@ export class SqliteReplicaStore {
         }
         localValue = resolvedValue;
         const payload = canonicalJson(localValue);
-        const audit = canonicalJson({
+        const auditEvent: MutationAuditPayload = {
           campaignId: conflict.campaignId,
-          actorUserId: input.resolverUserId,
           action: 'sync.conflict_resolved',
           targetType: conflict.table,
           targetId: conflict.id,
-          conflictId: conflict.conflictId,
-          choice: input.choice,
+          after: { conflictId: conflict.conflictId, choice: input.choice },
           at: input.resolvedAt,
-        });
+          private: false,
+        };
+        if (!isValidMutationAudit(auditEvent)) return err(INVALID_AUDIT);
+        const audit = canonicalJson(auditEvent);
         if (!this.#hasCapacity(conflict.campaignId, payload, audit)) {
           return err(
             apiError('storage_full', 'Offline storage is full. Existing work is preserved.'),
@@ -584,11 +611,134 @@ export class SqliteReplicaStore {
     drop.immediate();
   }
 
+  /** Every campaign with any local trace: records, queue, conflicts, state, or cached membership. */
   campaignIds(): string[] {
     return this.#db
-      .query<{ campaign_id: string }, []>('SELECT DISTINCT campaign_id FROM sync_records')
+      .query<{ campaign_id: string }, []>(
+        `SELECT campaign_id FROM sync_records
+         UNION SELECT campaign_id FROM sync_pending_mutations
+         UNION SELECT campaign_id FROM sync_conflicts
+         UNION SELECT campaign_id FROM sync_campaign_state
+         UNION SELECT campaign_id FROM sync_membership_cache
+         ORDER BY campaign_id`,
+      )
       .all()
       .map((row) => row.campaign_id);
+  }
+
+  /** Stable replica identity for one campaign on this device; created on first use. */
+  replicaId(campaignId: string, createId: () => string = () => crypto.randomUUID()): string {
+    const known = this.knownReplicaId(campaignId);
+    if (known !== undefined) return known;
+    const replicaId = createId();
+    this.#db
+      .query<unknown, [string, string]>(
+        `INSERT INTO sync_campaign_state (campaign_id, replica_state, replica_id)
+         VALUES (?, 'populating', ?)
+         ON CONFLICT (campaign_id) DO UPDATE SET replica_id = excluded.replica_id
+         WHERE sync_campaign_state.replica_id IS NULL`,
+      )
+      .run(campaignId, replicaId);
+    return this.knownReplicaId(campaignId) ?? replicaId;
+  }
+
+  knownReplicaId(campaignId: string): string | undefined {
+    return (
+      this.#db
+        .query<{ replica_id: string | null }, [string]>(
+          'SELECT replica_id FROM sync_campaign_state WHERE campaign_id = ?',
+        )
+        .get(campaignId)?.replica_id ?? undefined
+    );
+  }
+
+  cachedMembership(campaignId: string): CachedMembership | undefined {
+    const row = this.#db
+      .query<MembershipRow, [string]>(
+        `SELECT campaign_id, user_id, role, version, updated_at, removed_at
+         FROM sync_membership_cache WHERE campaign_id = ?`,
+      )
+      .get(campaignId);
+    return row === null ? undefined : toMembership(row);
+  }
+
+  cachedMemberships(): CachedMembership[] {
+    return this.#db
+      .query<MembershipRow, []>(
+        `SELECT campaign_id, user_id, role, version, updated_at, removed_at
+         FROM sync_membership_cache ORDER BY campaign_id`,
+      )
+      .all()
+      .map(toMembership);
+  }
+
+  putMembership(row: CachedMembership): void {
+    this.#db
+      .query<unknown, [string, string, string, number, string, string | null]>(
+        `INSERT INTO sync_membership_cache
+           (campaign_id, user_id, role, version, updated_at, removed_at)
+         VALUES (?, ?, ?, ?, ?, ?)
+         ON CONFLICT (campaign_id) DO UPDATE SET
+           user_id = excluded.user_id, role = excluded.role, version = excluded.version,
+           updated_at = excluded.updated_at, removed_at = excluded.removed_at`,
+      )
+      .run(row.campaignId, row.userId, row.role, row.version, row.updatedAt, row.removedAt);
+  }
+
+  deleteMembership(campaignId?: string): void {
+    if (campaignId === undefined) {
+      this.#db.exec('DELETE FROM sync_membership_cache');
+      return;
+    }
+    this.#db
+      .query<unknown, [string]>('DELETE FROM sync_membership_cache WHERE campaign_id = ?')
+      .run(campaignId);
+  }
+
+  /** A cached removal tombstone: local writes for this campaign are refused. */
+  accessRevoked(campaignId: string): boolean {
+    return this.cachedMembership(campaignId)?.removedAt != null;
+  }
+
+  /** The campaign-create mutation is still queued (offline creation not yet accepted). */
+  hasPendingCreation(campaignId: string): boolean {
+    return (
+      (this.#db
+        .query<CountRow, [string]>(
+          `SELECT count(*) AS count FROM sync_pending_mutations
+           WHERE campaign_id = ? AND record_id = campaign_id AND operation = 'insert'
+             AND expected_version IS NULL AND state IN ('pending','uploading')`,
+        )
+        .get(campaignId)?.count ?? 0) > 0
+    );
+  }
+
+  /**
+   * The campaign-create mutation was accepted by the authority (terminal state is persisted, so
+   * this survives restart). A rejected or still queued creation is not accepted.
+   */
+  hasAcceptedCreation(campaignId: string): boolean {
+    return (
+      (this.#db
+        .query<CountRow, [string]>(
+          `SELECT count(*) AS count FROM sync_pending_mutations
+           WHERE campaign_id = ? AND record_id = campaign_id AND operation = 'insert'
+             AND expected_version IS NULL AND state = 'accepted'`,
+        )
+        .get(campaignId)?.count ?? 0) > 0
+    );
+  }
+
+  /** Records in `tableName` still referenced by unfinished local work (watermark evidence). */
+  pendingRecordIds(campaignId: string, tableName: string): string[] {
+    return this.#db
+      .query<{ record_id: string }, [string, string]>(
+        `SELECT DISTINCT record_id FROM sync_pending_mutations
+         WHERE campaign_id = ? AND table_name = ? AND state IN ('pending','uploading','conflicted')
+         ORDER BY record_id`,
+      )
+      .all(campaignId, tableName)
+      .map((row) => row.record_id);
   }
 
   bookkeepingBytes(campaignId?: string): number {
@@ -693,6 +843,20 @@ export class SqliteReplicaStore {
   }
 }
 
+const ACCESS_REVOKED = apiError('not_found_or_forbidden', 'Campaign access was revoked.');
+const INVALID_AUDIT = apiError('validation_failed', 'Audit payload is invalid.');
+
+function toMembership(row: MembershipRow): CachedMembership {
+  return {
+    campaignId: row.campaign_id,
+    userId: row.user_id,
+    role: row.role,
+    version: row.version,
+    updatedAt: row.updated_at,
+    removedAt: row.removed_at,
+  };
+}
+
 function toMutation(row: MutationRow): PendingMutation {
   return {
     mutationId: row.mutation_id,
@@ -703,6 +867,9 @@ function toMutation(row: MutationRow): PendingMutation {
     operation: row.operation,
     expectedVersion: row.expected_version,
     payload: parseJson<unknown>(row.payload),
+    ...(row.audit_payload == null
+      ? {}
+      : { audit: parseJson<MutationAuditPayload>(row.audit_payload) }),
     causalSequence: row.causal_sequence,
     state: row.state,
     attemptCount: row.attempt_count,

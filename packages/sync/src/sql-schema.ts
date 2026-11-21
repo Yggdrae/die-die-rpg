@@ -1,5 +1,3 @@
-export const LOCAL_SCHEMA_VERSION = 1;
-
 export const LOCAL_SCHEMA_SQL = `
 CREATE TABLE IF NOT EXISTS sync_campaign_state (
   campaign_id TEXT PRIMARY KEY,
@@ -82,3 +80,24 @@ CREATE TABLE IF NOT EXISTS sync_long_text_holds (
   PRIMARY KEY (campaign_id, resource_class, record_id, field_path)
 );
 `;
+
+/**
+ * v2 (feature 03 task 07): stable per-campaign replica identity, and the current user's membership
+ * cache (feature 01 `_db.md` fields only). A removed membership stays as a tombstone row so a
+ * stale lower-version delivery cannot restore access; sign-out clears the table.
+ */
+export const LOCAL_SCHEMA_V2_SQL = `
+ALTER TABLE sync_campaign_state ADD COLUMN replica_id TEXT;
+CREATE TABLE IF NOT EXISTS sync_membership_cache (
+  campaign_id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL,
+  role TEXT NOT NULL,
+  version INTEGER NOT NULL CHECK (version >= 1),
+  updated_at TEXT NOT NULL,
+  removed_at TEXT
+);
+`;
+
+/** Ordered, transactional local migrations; index + 1 is the schema version. */
+export const LOCAL_MIGRATIONS: readonly string[] = [LOCAL_SCHEMA_SQL, LOCAL_SCHEMA_V2_SQL];
+export const LOCAL_SCHEMA_VERSION = LOCAL_MIGRATIONS.length;

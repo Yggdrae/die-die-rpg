@@ -3,6 +3,7 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { makeEntity, repositoryContractTests } from '@rpg/contracts/testing/repository-contract';
+import { Value } from '@sinclair/typebox/value';
 import {
   AuthorityMutationService,
   InMemoryMutationReceiptStore,
@@ -18,12 +19,14 @@ import {
 } from './bun-repository.ts';
 import { SqliteReplicaStore } from './bun-sqlite.ts';
 import { InMemoryLongTextHoldRepository, LongTextDraft, LongTextHoldService } from './holds.ts';
-import type { PendingMutation } from './model.ts';
+import type { MutationBatch, MutationOutcome, PendingMutation } from './model.ts';
+import { MutationBatchSchema } from './schemas.ts';
 import {
   applySemanticOperations,
   InMemorySemanticAuthorityStore,
   SemanticMutationApplier,
 } from './semantic.ts';
+import { LOCAL_SCHEMA_VERSION } from './sql-schema.ts';
 import { SyncStatusStore } from './status.ts';
 import { isTombstoneSafeToPurge } from './watermarks.ts';
 
@@ -78,18 +81,18 @@ describe('SQLite replica and mutation queue', () => {
     const before = store.pending(CAMPAIGN);
     expect(() =>
       store.applyMigration(
-        2,
+        LOCAL_SCHEMA_VERSION + 1,
         'ALTER TABLE sync_campaign_state ADD COLUMN migration_probe TEXT',
         () => {
           throw new Error('injected migration failure');
         },
       ),
     ).toThrow('injected migration failure');
-    expect(store.schemaVersion()).toBe(1);
+    expect(store.schemaVersion()).toBe(LOCAL_SCHEMA_VERSION);
     expect(store.pending(CAMPAIGN)).toEqual(before);
     store.close();
     const recovered = new SqliteReplicaStore(filename);
-    expect(recovered.schemaVersion()).toBe(1);
+    expect(recovered.schemaVersion()).toBe(LOCAL_SCHEMA_VERSION);
     expect(recovered.pending(CAMPAIGN)).toEqual(before);
     recovered.close();
   });
@@ -231,7 +234,7 @@ describe('SQLite replica and mutation queue', () => {
     const status = new SyncStatusStore();
     await repository(store).upsert(makeEntity(crypto.randomUUID(), 'Private'), null);
     const manager = new ReplicaManager(store, status);
-    manager.revoke(CAMPAIGN);
+    await manager.revoke(CAMPAIGN);
     expect(store.list('entities', CAMPAIGN, {})).toHaveLength(0);
     expect(store.pendingCount(CAMPAIGN)).toBe(0);
   });
@@ -241,16 +244,110 @@ describe('SQLite replica and mutation queue', () => {
     const status = new SyncStatusStore();
     await repository(store).upsert(makeEntity(crypto.randomUUID(), 'Private'), null);
     const manager = new ReplicaManager(store, status);
+    let noAccess = 0;
     const connector = new RegisteredPowerSyncConnector(
-      CAMPAIGN,
+      {
+        campaigns: async () => [CAMPAIGN],
+        replicaId: async () => REPLICA,
+        accessDenied: async (campaignId) => manager.revoke(campaignId),
+        noAccess: () => {
+          noAccess += 1;
+        },
+      },
       { nextBatch: async () => undefined, applyOutcomes: async () => undefined },
       async () => new Response(null, { status: 404 }),
-      () => manager.revoke(CAMPAIGN),
     );
 
     await expect(connector.fetchCredentials()).rejects.toThrow('sync_bootstrap_failed');
     expect(store.list('entities', CAMPAIGN, {})).toHaveLength(0);
     expect(store.pendingCount(CAMPAIGN)).toBe(0);
+    expect(noAccess).toBe(1);
+  });
+
+  test('a credential comes from any campaign that still authorizes the user', async () => {
+    const OTHER = '3f2504e0-4f89-41d3-9a0c-0305e82c3301';
+    const denied: string[] = [];
+    const requested: string[] = [];
+    const connector = new RegisteredPowerSyncConnector(
+      {
+        campaigns: async () => [CAMPAIGN, OTHER],
+        replicaId: async () => REPLICA,
+        accessDenied: async (campaignId) => void denied.push(campaignId),
+        noAccess: () => {
+          throw new Error('unexpected');
+        },
+      },
+      { nextBatch: async () => undefined, applyOutcomes: async () => undefined },
+      async (input) => {
+        requested.push(String(input));
+        return String(input).includes(CAMPAIGN)
+          ? new Response(null, { status: 404 })
+          : Response.json({ endpoint: 'http://sync.test', token: 'token' });
+      },
+    );
+
+    expect(await connector.fetchCredentials()).toEqual({
+      endpoint: 'http://sync.test',
+      token: 'token',
+    });
+    expect(denied).toEqual([CAMPAIGN]);
+    expect(requested).toEqual([
+      `/sync/bootstrap/${CAMPAIGN}?replicaId=${REPLICA}`,
+      `/sync/bootstrap/${OTHER}?replicaId=${REPLICA}`,
+    ]);
+  });
+
+  test('upload sends the registered batch and keeps the provider queue on a retryable outcome', async () => {
+    const mutation = pendingMutation();
+    let completed = 0;
+    let served = 0;
+    const applied: MutationOutcome[][] = [];
+    const database = {
+      getCrudBatch: async () => ({
+        complete: async () => {
+          completed += 1;
+        },
+      }),
+    } as unknown as Parameters<RegisteredPowerSyncConnector['uploadData']>[0];
+    const source = {
+      nextBatch: async () =>
+        served++ === 0
+          ? { campaignId: CAMPAIGN, replicaId: REPLICA, mutations: [mutation] }
+          : undefined,
+      applyOutcomes: async (outcomes: readonly MutationOutcome[]) =>
+        void applied.push([...outcomes]),
+    };
+    const respond = (outcome: MutationOutcome) =>
+      new RegisteredPowerSyncConnector(
+        {
+          campaigns: async () => [],
+          replicaId: async () => REPLICA,
+          accessDenied: async () => undefined,
+          noAccess: () => undefined,
+        },
+        source,
+        async () => Response.json({ outcomes: [outcome] }),
+      );
+
+    await expect(
+      respond({
+        mutationId: mutation.mutationId,
+        status: 'error',
+        code: 'unavailable',
+        retryable: true,
+      }).uploadData(database),
+    ).rejects.toThrow('sync_upload_retry');
+    expect(completed).toBe(0);
+
+    served = 0;
+    await respond({
+      mutationId: mutation.mutationId,
+      status: 'accepted',
+      acceptedVersion: 2,
+      serverCursor: 'c2',
+    }).uploadData(database);
+    expect(completed).toBe(1);
+    expect(applied.map((outcomes) => outcomes[0]?.status)).toEqual(['error', 'accepted']);
   });
 });
 
@@ -359,15 +456,17 @@ describe('holds, watermarks, status, and backend selection', () => {
       userId: crypto.randomUUID(),
       sessionId: crypto.randomUUID(),
     });
-    expect(
-      await holds.mayWrite({ field, holderSessionId: SESSION, expectedVersion: first.version }),
-    ).toBe(false);
+    const mayWrite = (expectedVersion: number, holderSessionId: string) =>
+      holds.mayWriteWithin(undefined, { field, holderSessionId, expectedVersion });
+    expect(await mayWrite(first.version, SESSION)).toBe(false);
+    expect(await mayWrite(second.version, second.holderSessionId)).toBe(true);
     expect(second.version).toBe(2);
     expect(notices).toMatchObject([{ kind: 'taken_over', previousHolderUserId: USER, version: 2 }]);
     draft.loseHold();
     expect(draft.value).toBe('unsaved local work');
 
     now = new Date('2026-08-31T10:03:00Z');
+    expect(await mayWrite(second.version, second.holderSessionId)).toBe(false);
     const third = await holds.acquire(field, { userId: USER, sessionId: SESSION });
     expect('heldBy' in third).toBe(false);
   });
@@ -435,3 +534,185 @@ function pendingMutation(overrides: Partial<PendingMutation> = {}): PendingMutat
     ...overrides,
   };
 }
+
+describe('audit envelope on the uploaded mutation (feature 06)', () => {
+  const validBatch = (mutation: unknown) => ({
+    campaignId: CAMPAIGN,
+    replicaId: REPLICA,
+    mutations: [mutation],
+  });
+
+  test('local write stores the validated payload and pending() carries it through restart', async () => {
+    const directory = mkdtempSync(join(tmpdir(), 'rpg-sync-audit-'));
+    tempDirectories.push(directory);
+    const filename = join(directory, 'replica.sqlite');
+    const first = new SqliteReplicaStore(filename);
+    const id = crypto.randomUUID();
+    const created = await repository(first).upsert(makeEntity(id, 'Audited'), null);
+    expect(created.ok).toBe(true);
+    first.close();
+
+    const reopened = new SqliteReplicaStore(filename);
+    const [pending] = reopened.pending(CAMPAIGN);
+    expect(pending?.audit).toMatchObject({
+      campaignId: CAMPAIGN,
+      actor: ACTOR,
+      action: 'entities.created',
+      targetType: 'entities',
+      targetId: id,
+      after: { version: 1 },
+      private: true, // the fixture entity is GM-only
+    });
+    // The uploaded envelope is exactly what the wire schema accepts.
+    expect(Value.Check(MutationBatchSchema, validBatch(pending))).toBe(true);
+    reopened.close();
+  });
+
+  test('tombstone and conflict resolution mutations carry valid payloads too', async () => {
+    const store = new SqliteReplicaStore();
+    const repo = repository(store);
+    const id = crypto.randomUUID();
+    const created = await repo.upsert(makeEntity(id, 'Doomed'), null);
+    if (!created.ok) throw new Error('fixture create failed');
+    expect((await repo.softDelete(id, created.value.version)).ok).toBe(true);
+    const pending = store.pending(CAMPAIGN);
+    expect(pending.map((item) => item.audit?.action)).toEqual([
+      'entities.created',
+      'entities.deleted',
+    ]);
+
+    const conflictStore = new SqliteReplicaStore();
+    const conflicting = repository(conflictStore);
+    const conflictId = crypto.randomUUID();
+    const submitted = await conflicting.upsert(makeEntity(conflictId, 'Submitted'), null);
+    if (!submitted.ok) throw new Error('fixture create failed');
+    const [mutation] = conflictStore.pending(CAMPAIGN);
+    if (mutation === undefined) throw new Error('fixture mutation missing');
+    conflictStore.applyOutcomes(
+      [
+        {
+          mutationId: mutation.mutationId,
+          status: 'conflict',
+          expectedVersion: 0,
+          actualVersion: 3,
+          currentValue: { ...submitted.value, name: 'Authority', version: 3 },
+        },
+      ],
+      '2026-08-31T10:01:00Z',
+    );
+    const [conflict] = conflictStore.conflicts(CAMPAIGN);
+    if (conflict === undefined) throw new Error('fixture conflict missing');
+    const resolved = new ConflictResolutionService(
+      conflictStore,
+      new SyncStatusStore(),
+      USER,
+      () => new Date('2026-08-31T10:02:00Z'),
+      () => crypto.randomUUID(),
+    ).resolve({ conflictId: conflict.conflictId, choice: 'resubmit' });
+    expect(resolved.ok).toBe(true);
+    const [resolution] = conflictStore.pending(CAMPAIGN);
+    expect(resolution?.operation).toBe('resolution');
+    expect(resolution?.audit).toMatchObject({
+      action: 'sync.conflict_resolved',
+      targetId: conflictId,
+      after: { conflictId: conflict.conflictId, choice: 'resubmit' },
+    });
+    expect(Value.Check(MutationBatchSchema, validBatch(resolution))).toBe(true);
+  });
+
+  test('an invalid payload fails the local write atomically', () => {
+    const store = new SqliteReplicaStore();
+    const entity = makeEntity(crypto.randomUUID(), 'Rejected');
+    const audit = {
+      campaignId: CAMPAIGN,
+      actor: ACTOR,
+      action: 'entities.created',
+      targetType: 'entities',
+      targetId: entity.id,
+      at: '2026-10-24T10:00:00Z',
+      private: false,
+    };
+    const write = (value: unknown) =>
+      store.write({
+        tableName: 'entities',
+        featureId: 'entities',
+        value: entity,
+        expectedVersion: null,
+        operation: 'insert',
+        mutationId: crypto.randomUUID(),
+        recordedAt: '2026-10-24T10:00:00Z',
+        audit: value as typeof audit,
+      });
+    for (const invalid of [
+      { ...audit, private: undefined },
+      { ...audit, targetId: 'not-an-id' },
+      { ...audit, extra: true },
+      { ...audit, after: { blob: 'x'.repeat(16_385) } },
+      null,
+    ]) {
+      expect(write(invalid)).toMatchObject({ ok: false, error: { code: 'validation_failed' } });
+    }
+    expect(store.pendingCount(CAMPAIGN)).toBe(0);
+    expect(store.list('entities', CAMPAIGN, {})).toHaveLength(0);
+    expect(write(audit).ok).toBe(true);
+  });
+
+  test('wire schema keeps older clients valid and refuses unknown audit properties', async () => {
+    const store = new SqliteReplicaStore();
+    await repository(store).upsert(makeEntity(crypto.randomUUID(), 'Wire'), null);
+    const [pending] = store.pending(CAMPAIGN);
+    if (pending === undefined) throw new Error('fixture mutation missing');
+    const { audit, ...legacy } = pending;
+    expect(audit).toBeDefined();
+    expect(Value.Check(MutationBatchSchema, validBatch(legacy))).toBe(true);
+    expect(
+      Value.Check(
+        MutationBatchSchema,
+        validBatch({ ...pending, audit: { ...audit, id: SESSION } }),
+      ),
+    ).toBe(false);
+    expect(
+      Value.Check(
+        MutationBatchSchema,
+        validBatch({ ...pending, audit: { ...audit, actor: { ...ACTOR, extra: 1 } } }),
+      ),
+    ).toBe(false);
+    expect(
+      Value.Check(MutationBatchSchema, validBatch({ ...pending, audit: { ...audit, at: 'now' } })),
+    ).toBe(false);
+  });
+
+  test('drained uploads include the envelope until the authority accepts it', async () => {
+    const store = new SqliteReplicaStore();
+    const status = new SyncStatusStore();
+    const hub = new ConflictHub();
+    const repo = new SqliteSyncedRepository(store, 'entities', 'entities', ACTOR, status, hub);
+    await repo.upsert(makeEntity(crypto.randomUUID(), 'Retried'), null);
+    const queue = new MutationQueue(store, status, hub);
+    const uploaded: (string | undefined)[] = [];
+    const upload = (outcome: 'retry' | 'accepted') => ({
+      upload: async (batch: MutationBatch) => {
+        uploaded.push(...batch.mutations.map((item) => item.audit?.action));
+        return batch.mutations.map((item) =>
+          outcome === 'retry'
+            ? {
+                mutationId: item.mutationId,
+                status: 'error' as const,
+                code: 'authority_unavailable',
+                retryable: true,
+              }
+            : {
+                mutationId: item.mutationId,
+                status: 'accepted' as const,
+                acceptedVersion: 1,
+                serverCursor: 'c',
+              },
+        );
+      },
+    });
+    await queue.drain(CAMPAIGN, REPLICA, upload('retry'));
+    await queue.drain(CAMPAIGN, REPLICA, upload('accepted'));
+    expect(uploaded).toEqual(['entities.created', 'entities.created']);
+    expect(store.pending(CAMPAIGN)).toEqual([]);
+  });
+});

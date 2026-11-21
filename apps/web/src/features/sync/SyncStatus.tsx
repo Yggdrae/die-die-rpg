@@ -1,15 +1,26 @@
 import type { MutationConflict, SyncStatus } from '@rpg/sync';
 
+/** Never "Synchronized" while work is pending, failed, unresolved, or the first sync is running. */
 export function syncStatusLabel(status: SyncStatus): string {
-  if (status.state === 'error') return `Sync error — ${status.pendingCount} pending`;
+  if (status.state === 'error') {
+    const unresolved = status.unresolvedConflicts ?? 0;
+    return `Sync error — ${status.pendingCount} pending${unresolved > 0 ? `, ${unresolved} unresolved` : ''}`;
+  }
   if (status.state === 'offline') return `Offline — ${status.pendingCount} pending`;
   if (status.state === 'pending') return `${status.pendingCount} pending`;
+  if (status.state === 'synchronizing') {
+    return `Synchronizing — ${Math.round((status.initialSyncProgress ?? 0) * 100)}%`;
+  }
   return 'Synchronized';
 }
 
 export function SyncStatusIndicator(props: { readonly status: SyncStatus }) {
   return (
-    <output aria-live="polite" data-sync-state={props.status.state}>
+    <output
+      aria-live="polite"
+      data-sync-state={props.status.state}
+      data-pending-count={props.status.pendingCount}
+    >
       {syncStatusLabel(props.status)}
       {props.status.initialSyncProgress !== undefined && (
         <progress value={props.status.initialSyncProgress} max={1}>

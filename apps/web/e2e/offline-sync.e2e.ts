@@ -18,6 +18,11 @@ for (const backend of ['opfs', 'indexeddb'] as const) {
     page,
   }) => {
     await page.goto('/');
+    test.skip(
+      backend === 'opfs' &&
+        !(await page.evaluate(() => typeof navigator.storage?.getDirectory === 'function')),
+      'this browser has no OPFS; the app uses IndexedDB there',
+    );
     const filename = `sync-e2e-${backend}-${crypto.randomUUID()}.sqlite`;
     const result = await page.evaluate(
       async ({ backend, filename, campaignId }) => {

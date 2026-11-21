@@ -1,6 +1,7 @@
 import type { TypeBoxTypeProvider } from '@fastify/type-provider-typebox';
-import { ApiError, apiError, ErrorCode } from '@rpg/contracts';
+import { type ActorRef, ApiError, apiError, ErrorCode } from '@rpg/contracts';
 import {
+  type AuditWatermarkScope,
   type AuthorityMutationService,
   CampaignParams,
   type CurrentAccessResolver,
@@ -11,12 +12,14 @@ import {
   type LongTextHoldService,
   MutationBatchResponse,
   MutationBatchSchema,
+  ReplicaAcknowledgementBody,
+  SyncBootstrapQuery,
   SyncBootstrapResponse,
   type SyncBootstrapService,
-  WatermarkAcknowledgement,
 } from '@rpg/sync';
 import { Type } from '@sinclair/typebox';
 import type { FastifyInstance, FastifyReply } from 'fastify';
+import type { ContentAccess } from '../authorization/content-access.ts';
 import { requireAuthenticatedUser } from '../identity/authenticate.ts';
 import { requireSameOrigin } from '../security.ts';
 
@@ -27,12 +30,26 @@ export interface SyncWatermarkRecorder {
     readonly replicaId: string;
     readonly tableName: string;
     readonly sequence: number;
+    readonly pendingRecordIds?: readonly string[];
   }): Promise<void>;
   replicaDropped(input: {
     readonly campaignId: string;
     readonly userId: string;
     readonly replicaId: string;
   }): Promise<void>;
+}
+
+/**
+ * Feature 06 retention follow-up: resolves a replica's audit acknowledgement (an event ID it holds)
+ * to that event's sequence, only when the event is in the campaign's store and `actor` may read
+ * it now; anything else is `undefined`.
+ */
+export interface SyncAuditAcknowledgements {
+  resolve(
+    actor: ActorRef,
+    tableName: AuditWatermarkScope,
+    eventId: string,
+  ): Promise<number | undefined>;
 }
 
 export function registerSyncRoutes(
@@ -42,7 +59,11 @@ export function registerSyncRoutes(
     readonly bootstrap: SyncBootstrapService;
     readonly mutations: AuthorityMutationService;
     readonly holds: LongTextHoldService;
+    /** Feature 04 decision for the held record; a hold needs `update` on it. */
+    readonly records: Pick<ContentAccess, 'authorizeResource'>;
     readonly watermarks: SyncWatermarkRecorder;
+    /** Absent: audit acknowledgements are accepted and ignored (no audit stores composed). */
+    readonly auditAcknowledgements?: SyncAuditAcknowledgements;
   },
   options: { readonly allowedOrigin: string },
 ): void {
@@ -55,13 +76,18 @@ export function registerSyncRoutes(
       preHandler: requireAuthenticatedUser,
       schema: {
         params: CampaignParams,
+        querystring: SyncBootstrapQuery,
         response: { 200: SyncBootstrapResponse, 404: ApiError },
       },
     },
     async (request, reply) => {
       const user = request.authenticatedUser;
       if (user === undefined) return;
-      const bootstrap = await services.bootstrap.bootstrap(user.userId, request.params.campaignId);
+      const bootstrap = await services.bootstrap.bootstrap(
+        user.userId,
+        request.params.campaignId,
+        request.query.replicaId,
+      );
       return bootstrap === undefined ? hidden(reply) : reply.status(200).send(bootstrap);
     },
   );
@@ -78,7 +104,10 @@ export function registerSyncRoutes(
     async (request, reply) => {
       const user = request.authenticatedUser;
       if (user === undefined) return;
-      const outcomes = await services.mutations.apply(user.userId, request.body);
+      // B-2: the authenticated session (never the payload) reaches the appliers for holds.
+      const outcomes = await services.mutations.apply(user.userId, request.body, {
+        sessionId: user.sessionId,
+      });
       return reply.status(200).send({ outcomes: [...outcomes] });
     },
   );
@@ -89,20 +118,39 @@ export function registerSyncRoutes(
       preHandler: [requireAuthenticatedUser, sameOrigin],
       schema: {
         params: CampaignParams,
-        body: WatermarkAcknowledgement,
-        response: { 204: Type.Null(), 404: ApiError },
+        body: ReplicaAcknowledgementBody,
+        response: { 204: Type.Null(), 400: ApiError, 404: ApiError },
       },
     },
     async (request, reply) => {
       const user = request.authenticatedUser;
       if (user === undefined) return;
-      if ((await services.access.resolve(user.userId, request.params.campaignId)) === undefined) {
-        return hidden(reply);
+      const actor = await services.access.resolve(user.userId, request.params.campaignId);
+      if (actor === undefined) return hidden(reply);
+      const body = request.body;
+      if ('throughEventId' in body) {
+        // Audit stores: the device names an event it holds; the sequence is resolved here and
+        // never returned. An unresolvable event answers the same 204 and records nothing.
+        const sequence = await services.auditAcknowledgements?.resolve(
+          actor,
+          body.tableName,
+          body.throughEventId,
+        );
+        if (sequence !== undefined) {
+          await services.watermarks.acknowledge({
+            campaignId: request.params.campaignId,
+            userId: user.userId,
+            replicaId: body.replicaId,
+            tableName: body.tableName,
+            sequence,
+          });
+        }
+        return reply.status(204).send(null);
       }
       await services.watermarks.acknowledge({
         campaignId: request.params.campaignId,
         userId: user.userId,
-        ...request.body,
+        ...body,
       });
       return reply.status(204).send(null);
     },
@@ -134,6 +182,22 @@ export function registerSyncRoutes(
     },
   );
 
+  // Unknown, hidden, missing and denied records answer like a non-member campaign, so a hold
+  // (and its holder) is never disclosed for a record the caller cannot edit.
+  const mayHold = async (
+    userId: string,
+    campaignId: string,
+    field: { readonly resourceClass: string; readonly recordId: string },
+  ) =>
+    (
+      await services.records.authorizeResource(userId, {
+        campaignId,
+        resourceClass: field.resourceClass,
+        resourceId: field.recordId,
+        capability: 'update',
+      })
+    ).allowed;
+
   for (const action of ['acquire', 'takeover'] as const) {
     app.post(
       `/sync/holds/:campaignId/${action}`,
@@ -148,7 +212,7 @@ export function registerSyncRoutes(
       async (request, reply) => {
         const user = request.authenticatedUser;
         if (user === undefined) return;
-        if ((await services.access.resolve(user.userId, request.params.campaignId)) === undefined) {
+        if (!(await mayHold(user.userId, request.params.campaignId, request.body))) {
           return hidden(reply);
         }
         const field = { campaignId: request.params.campaignId, ...request.body };
@@ -177,7 +241,7 @@ export function registerSyncRoutes(
     async (request, reply) => {
       const user = request.authenticatedUser;
       if (user === undefined) return;
-      if ((await services.access.resolve(user.userId, request.params.campaignId)) === undefined) {
+      if (!(await mayHold(user.userId, request.params.campaignId, request.body))) {
         return hidden(reply);
       }
       const { expectedVersion, ...fieldBody } = request.body;
@@ -205,7 +269,7 @@ export function registerSyncRoutes(
     async (request, reply) => {
       const user = request.authenticatedUser;
       if (user === undefined) return;
-      if ((await services.access.resolve(user.userId, request.params.campaignId)) === undefined) {
+      if (!(await mayHold(user.userId, request.params.campaignId, request.body))) {
         return hidden(reply);
       }
       const { expectedVersion, ...fieldBody } = request.body;

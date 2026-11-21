@@ -5,6 +5,9 @@ import type {
   EntityEnvelope,
   Id,
   ListOptions,
+  ReplicaPurged,
+  ReplicaPurgeListener,
+  ReplicaPurgeReason,
   RepositoryError,
   Result,
   SyncedRepository,
@@ -16,8 +19,11 @@ import type {
   ConflictResolutionChoice,
   ConflictResolutionResult,
   MutationConflict,
+  MutationDrainReport,
+  MutationOutcome,
   MutationUploader,
 } from './model.ts';
+import type { ReplicaPurgeResult } from './replica-access.ts';
 import type { SyncStatusStore } from './status.ts';
 
 export class ConflictHub {
@@ -125,27 +131,41 @@ export class MutationQueue {
     private readonly clock: () => Date = () => new Date(),
   ) {}
 
+  /** Drains one ordered batch; returns only the deferred conflicts it raised. */
   async drain(
     campaignId: string,
     replicaId: string,
     uploader: MutationUploader,
   ): Promise<readonly DeferredConflict[]> {
-    if (!this.status.snapshot().connected) return [];
+    return (await this.drainWithOutcomes(campaignId, replicaId, uploader)).conflicts;
+  }
+
+  /**
+   * Drains one ordered batch and reports every item's authority outcome in causal order, so a
+   * consuming feature can act on acceptance (e.g. queue invitations after campaign creation).
+   */
+  async drainWithOutcomes(
+    campaignId: string,
+    replicaId: string,
+    uploader: MutationUploader,
+  ): Promise<MutationDrainReport> {
+    if (!this.status.snapshot().connected) return { state: 'offline', outcomes: [], conflicts: [] };
     const mutations = this.store.pending(campaignId);
     if (mutations.length === 0) {
       this.status.setPendingCount(this.store.pendingCount(campaignId));
-      return [];
+      return { state: 'empty', outcomes: [], conflicts: [] };
     }
     this.store.markUploading(mutations.map((mutation) => mutation.mutationId));
     try {
       const outcomes = await uploader.upload({ campaignId, replicaId, mutations });
-      const expected = new Set(mutations.map((mutation) => mutation.mutationId));
+      const byId = new Map(outcomes.map((outcome) => [outcome.mutationId, outcome]));
       if (
         outcomes.length !== mutations.length ||
-        outcomes.some((outcome) => !expected.has(outcome.mutationId))
+        byId.size !== mutations.length ||
+        mutations.some((mutation) => !byId.has(mutation.mutationId))
       ) {
         this.status.fail('invalid_upload_outcome');
-        return [];
+        return { state: 'invalid_outcome', outcomes: [], conflicts: [] };
       }
       const found = this.store.applyOutcomes(outcomes, timestamp(this.clock()));
       for (const conflict of found) this.conflicts.emit(conflict);
@@ -155,11 +175,32 @@ export class MutationQueue {
       } else if (found.length === 0 && this.store.pendingCount(campaignId) === 0) {
         this.status.synchronized(timestamp(this.clock()));
       }
-      return found;
+      return {
+        state: 'uploaded',
+        conflicts: found,
+        outcomes: mutations.map((mutation) => {
+          const outcome = byId.get(mutation.mutationId) as MutationOutcome;
+          return {
+            mutationId: mutation.mutationId,
+            campaignId: mutation.campaignId,
+            featureId: mutation.featureId,
+            tableName: mutation.tableName,
+            recordId: mutation.recordId,
+            operation: mutation.operation,
+            result:
+              outcome.status === 'error'
+                ? outcome.retryable
+                  ? 'retry'
+                  : 'rejected'
+                : outcome.status,
+            outcome,
+          };
+        }),
+      };
     } catch {
       this.status.fail('sync_transport_error');
       this.status.setPendingCount(this.store.pendingCount(campaignId));
-      return [];
+      return { state: 'transport_error', outcomes: [], conflicts: [] };
     }
   }
 }
@@ -191,21 +232,60 @@ export class ConflictResolutionService {
   }
 }
 
+/**
+ * Destroys campaign replicas. The local drop is synchronous and complete (records, queue, audit
+ * envelopes, conflicts, holds, watermarks, state) before any listener runs, so a concurrent drain
+ * finds no pending work and later outcomes for dropped mutations are ignored.
+ */
 export class ReplicaManager {
   constructor(
     private readonly store: SqliteReplicaStore,
     private readonly status: SyncStatusStore,
+    private readonly listeners: readonly ReplicaPurgeListener[] = [],
+    private readonly clock: () => Date = () => new Date(),
   ) {}
 
-  revoke(campaignId: string): void {
+  /**
+   * `access_revoked` keeps the cached membership tombstone (so a stale delivery cannot restore
+   * access and local writes stay refused); other reasons clear the cached membership too.
+   */
+  async purge(campaignId: string, reason: ReplicaPurgeReason): Promise<ReplicaPurgeResult> {
+    const replicaId = this.store.replicaId(campaignId);
+    const purgedAt = timestamp(this.clock());
     this.store.dropCampaign(campaignId);
+    const cached = this.store.cachedMembership(campaignId);
+    if (reason !== 'access_revoked') this.store.deleteMembership(campaignId);
+    else if (cached !== undefined && cached.removedAt === null) {
+      // Revoked without a delivered tombstone (bootstrap denial): tombstone the cache locally.
+      this.store.putMembership({ ...cached, removedAt: purgedAt });
+    }
     this.status.setPendingCount(this.store.pendingCount());
+    const event: ReplicaPurged = { campaignId, replicaId, reason, purgedAt };
+    const settled = await Promise.allSettled(
+      this.listeners.map((listener) => listener.replicaPurged(event)),
+    );
+    return {
+      event,
+      listenerErrors: settled.flatMap((result) =>
+        result.status === 'rejected' ? [result.reason] : [],
+      ),
+    };
   }
 
-  signOut(): void {
-    for (const campaignId of this.store.campaignIds()) this.store.dropCampaign(campaignId);
+  revoke(campaignId: string): Promise<ReplicaPurgeResult> {
+    return this.purge(campaignId, 'access_revoked');
+  }
+
+  /** Clears every campaign replica and the whole membership cache. */
+  async signOut(): Promise<readonly ReplicaPurgeResult[]> {
+    const results: ReplicaPurgeResult[] = [];
+    for (const campaignId of this.store.campaignIds()) {
+      results.push(await this.purge(campaignId, 'signed_out'));
+    }
+    this.store.deleteMembership();
     this.status.setPendingCount(0);
     this.status.setConnected(false);
+    return results;
   }
 }
 

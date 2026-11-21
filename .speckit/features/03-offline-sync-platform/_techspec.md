@@ -12,6 +12,48 @@ Source: `_prd.md`, `_bdd.md`, `_domain.md`, `_db.md`, feature 00 spike/freeze/AD
   isolated. IndexedDB fallback, real permission rules, multi-client convergence, and revocation
   were not proven by the spike.
 - No PowerSync package/service integration or browser persistence exists in the application.
+- B-2 (feature 16 task 06, 2026-10-28, additive): `AuthorityMutationContext` has
+  `sessionId?: string`; `AuthorityMutationService.apply(userId, batch, { sessionId? })` passes it to
+  every applier, and `POST /sync/mutations` supplies the authenticated `user.sessionId` (never a
+  payload value). Long-text appliers call `LongTextHoldService.mayWriteWithin` with it; absent means
+  `hold_required`. Other appliers ignore it.
+- Stabilization (2026-10-30, replaces `mayWrite`): `mayWriteWithin(transaction, input)` runs inside
+  the transaction that writes the text, on the same database, and keeps the hold row `FOR SHARE`
+  until it ends (`LongTextHoldRepository.lockWithin`, opaque handle as for `MutationAuditHook`). A
+  takeover commits before the check (refused) or after the write. Lock order: hold row, then content
+  row; hold writes lock only their own row. Proved in `appliers.integration.test.ts`.
+- Stabilization (2026-10-30): `AuthorityMutationService` re-reads the uploader's membership inside
+  the applier's write transaction, `FOR SHARE` (`CurrentAccessResolver.resolveWithin`, opaque handle),
+  through the `recordAudit` hook all five appliers already call before commit. A removal commits
+  before the read (rolled back, `not_found_or_forbidden`) or waits for the write. A role change is
+  rolled back as retryable `authority_unavailable`, and the retry authorizes under the new role.
+  Lock order: the write's rows, then the membership row; membership changes lock only membership
+  rows, so no new cycle. Proved in `appliers.integration.test.ts`. Applies only to uploads: the
+  campaign-creation path has no membership to check.
+- Stabilization (2026-10-30): `BrowserSyncSession`'s connector no longer waits for the access-denied
+  purge. It was queued in the session's serialized work, behind the provider disconnects and
+  reconnects that work runs, and those wait for the credential fetch: a 404 during a schema-switch
+  reconnect hung the session and left the revoked replica on the device.
+- Same change (additive): `MutationAuditHook` takes an optional `AuthoredMutationAudit`
+  (`action`, `targetType`, `before`, `after`, `targetVisibility`). When an applier passes it,
+  the authority records that server-authored content (in the transaction, and in the after-commit
+  fallback) instead of the envelope's client-composed `action`/`targetType`/`before`/`after`/
+  `private`; campaign, target ID, actor, origin ID, and `at` stay bound as before. The participant
+  inputs carry `targetVisibility`. Feature 16 content appliers use it so long text and custom-field
+  values never reach history and events are typed by Resource Class. The envelope is still required
+  for the hook to be offered; a receipt replay repairs from the envelope (idempotent by origin ID).
+- Feature 16 tasks 11–12 (2026-10-29, additive, `packages/sync/src/browser.ts`): the browser store
+  accepts feature-owned replica tables (`BrowserReplicaStore(db, { featureTables })`, set from the
+  session's `tables`) for local optimistic writes; `BrowserLocalWrite.operation` adds `tombstone`, and
+  optional `checkLocalVersion` compares the local row version inside the write transaction (`record`
+  returns a `BrowserRecordResult`). New: `BrowserSyncedRepository<T>` (the frozen `SyncedRepository`
+  over one feature table with a feature `BrowserRecordCodec`; it queues the audit envelope), created
+  through `BrowserSyncSession.repository(...)`; browser conflict resolution (`conflicts`, `conflict`,
+  `deferConflict`, `resolveConflict` with an optional resubmission in the same transaction; the
+  repository's `resolveConflict(id, 'keep_authority' | 'resubmit')`); upload conflicts emitted on
+  `conflictEvents`; `longTextHold(field)` (replicated hold row) and `latestMutationState`. Keeping the
+  authority writes nothing locally: the provider delivers the authority row once the upload queue
+  completes (the submitted value stays in the conflict row). Manual merge is not offered.
 
 ## Proposed Architecture
 
@@ -66,10 +108,12 @@ renderer-supported manual merge. Resolution itself is a new versioned mutation.
 
 ## Authorization and Visibility
 
-Feature 04 declarations generate API and sync predicates. Bootstrap and upload both require current
-membership. Membership removal triggers subscription revocation and replica deletion; server writes
-deny immediately even if the device is offline. A contract-change note adds a provider-neutral
-`CampaignAccessRevoked`/replica-purge boundary because the frozen contracts currently lack one.
+Feature 04 declarations generate API and sync predicates. Hand-written platform queries (settings,
+holds) derive their filters from the same declarations, and a drift test enforces it. Bootstrap and
+upload both require current membership. Membership removal triggers subscription revocation and
+replica deletion; server writes deny immediately even if the device is offline. A contract-change
+note adds a provider-neutral `CampaignAccessRevoked`/replica-purge boundary because the frozen
+contracts currently lack one.
 
 ## Data, Retention, and Offline
 
