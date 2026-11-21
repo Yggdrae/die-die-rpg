@@ -9,6 +9,19 @@ Source: `_prd.md`, `_bdd.md`, `_domain.md`, `_db.md`, frozen contracts, and feat
 - The architecture guard checks system IDs and package dependencies; it does not prove a content
   route calls authorization or that API/sync rules agree.
 - Feature 01 actor resolution and feature 03 sync enforcement are only partially/not implemented.
+- B-1 (feature 16 task 08, 2026-10-28, additive): `VisibilityWriteResult` also has
+  `{ ok: false, reason: 'invariant_violation' }`. `VisibilityService` maps it to the rejection
+  `incompatible_visibility` (route: 400 `validation_failed`), records no audit, and changes nothing.
+  `runVisibilityAdapterContract` has an optional 11th check `invariant_refused` (subject supplies
+  `invariantViolation(campaignId)`). First user: the `entity_relationship` adapter (a reveal wider
+  than its endpoints' intersection).
+- Same feature (task 09, additive): `VisibilityWrite.actor?: ActorRef` is the resolved Actor;
+  `VisibilityService` passes it so an owner that narrows dependent records in the same transaction
+  (feature 16 relationships, D-07 option A) attributes its own audit events to it.
+- Feature 16 tasks 12/13 (2026-10-29): `VisibilityControls` has production mounts on entity detail
+  (`campaign_entity`) and per relationship (`entity_relationship`) in
+  `apps/web/src/features/content`; `viewerRole` is the cached membership role; `onReload` refetches
+  the record (entity route / relationships route). Never mounted on personal notes.
 
 ## Proposed Architecture
 

@@ -1,6 +1,6 @@
 # Task 02: Resource policy registry and author-private rule
 
-Status: pending. Depends on task 01.
+Status: completed. Depends on task 01.
 
 ## Scope
 
@@ -22,3 +22,12 @@ bun test packages/authorization
 bun run guard
 ```
 
+## Evidence
+
+- `bun test packages/authorization`: 27 pass, 0 fail (285 expects) across
+  `authorization.test.ts`, `registry.test.ts`, `test-kit.test.ts`.
+- `bun run typecheck`: all 10 workspaces exit 0.
+- `bun run guard`: 174 files checked, no violations.
+- `bun run check`: 210 files, no fixes.
+- `bun test apps/api packages/sync` (DB env loaded): 166 pass, 0 fail — the campaign registration
+  in `apps/api/src/runtime.ts` passes the new startup validation.
